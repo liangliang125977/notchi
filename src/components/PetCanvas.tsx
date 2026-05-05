@@ -8,7 +8,6 @@ import {
   type PetAction,
   type PetSetActionPayload,
 } from "../stores/petStore";
-import { usePetWindowDrag } from "../hooks/usePetWindowDrag";
 
 const CANVAS_SIZE = 240;
 const MODEL_URL = "/assets/live2d/mao/mao_pro.model3.json";
@@ -61,8 +60,6 @@ async function playMotion(model: Live2DModel, action: PetAction) {
 export function PetCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
-
-  usePetWindowDrag({ targetRef: containerRef });
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -194,5 +191,5 @@ export function PetCanvas() {
     };
   }, []);
 
-  return <div ref={containerRef} className="pet-canvas" />;
+  return <div ref={containerRef} className="pet-canvas-inner" />;
 }

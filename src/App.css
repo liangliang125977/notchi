@@ -32,7 +32,26 @@ body,
   cursor: grabbing;
 }
 
+.pet-canvas-inner {
+  width: 240px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .pet-canvas canvas {
   display: block;
   background: transparent;
+}
+
+.pet-fallback-img {
+  width: 240px;
+  height: 240px;
+  display: block;
+  background: transparent;
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+  image-rendering: -webkit-optimize-contrast;
 }

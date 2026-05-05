@@ -14,6 +14,21 @@ export const PET_ACTIONS: readonly PetAction[] = [
 
 export const PET_SET_ACTION_EVENT = "pet:set-action";
 
+// SPEC §4 S15 dev-only path: settings emits this so the pet window
+// can flip into the static-PNG fallback render mode without us
+// having to physically break the Live2D assets.
+export const PET_FORCE_FALLBACK_EVENT = "pet:force-fallback";
+
+// SPEC §4 S15: pet broadcasts its renderMode (on change + on
+// startup) so the settings window can show / hide the degraded
+// banner. Two webviews share no in-process state, so we ride a
+// Tauri event instead of a shared Zustand store.
+export const PET_RENDER_MODE_EVENT = "pet:render-mode";
+
+export interface PetRenderModePayload {
+  renderMode: PetRenderMode;
+}
+
 export interface PetSetActionPayload {
   action: PetAction;
 }

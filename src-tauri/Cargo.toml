@@ -33,7 +33,11 @@ notify = "8"
 # tauri-plugin-sql (sqlite feature) already links libsqlite3 via sqlx
 # and Cargo forbids two crates linking the same native lib.
 # See CHANGELOG.md (2026-05-05) for the deviation from SPEC §6.6.
-rust_decimal = "1"
+rust_decimal = { version = "1", features = ["serde-with-str"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "time"] }
+walkdir = "2"
+chrono = { version = "0.4", features = ["serde"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

@@ -118,6 +118,14 @@ export function useEmotionEngine() {
             if (!payload) return;
             setAction("done");
             showBubble(completionCopy(payload.duration_secs));
+            // v1.1 — feed the pet on every completion. Privacy: only
+            // model name + source tag are sent; no path / content.
+            void invoke("record_feed", {
+              source: "claude-code",
+              model: payload.model,
+            }).catch((err) => {
+              console.error("[emotion] record_feed failed", err);
+            });
             // Native notification: independent of mute window per S9.
             void (async () => {
               const granted = await ensureNotifyPermission();

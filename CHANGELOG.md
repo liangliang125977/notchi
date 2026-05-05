@@ -223,3 +223,58 @@ Settings but the Live2D model lives in Pet, so the panel emits a
 pet window listens via `@tauri-apps/api/event::listen` and writes into
 its local `petStore`. No new Rust commands needed; `core:default` covers
 event emit/listen.
+
+## 2026-05-05 — T1.6 (drag + position memory + offscreen recovery)
+
+### `appWindow.startDragging()` not used
+
+**SPEC reference:** §4 S8 ("拖拽超过 5 px"), §6.7 D4 (吸附半径 100 px).
+
+Tauri's built-in drag helper (`Window::start_dragging`) hands control
+of the pointer to the OS window server, which on macOS gives a clean
+follow but exposes no callbacks for movement, no 5 px threshold, and
+no way to ignore micro-clicks. We need all three to implement S8 +
+D4 + S19 correctly, so the pet window is moved manually via
+`set_position` from the frontend instead.
+
+**Mechanism:** the `usePetCanvas` container captures `pointerdown` /
+`pointermove` / `pointerup` (DOM PointerEvents). The pointer offset
+inside the window is taken at `pointerdown.clientX/Y`; subsequent
+moves derive the new top-left as `screenX - offsetX`, which holds
+even as the window itself chases the cursor. `setPointerCapture` is
+mandatory — without it the moving window would steal hover from the
+canvas mid-drag.
+
+**Throttle:** `set_position` is throttled to one IPC per 16 ms (~60 Hz)
+to stay inside SPEC §6.1's CPU budget; pending moves coalesce via
+`setTimeout` and are flushed at drag-end so the release point matches
+the user's actual cursor position before the snap distance is computed.
+
+### `windowPosition` schema in `settings.json`
+
+```json
+{
+  "windowPosition": {
+    "x": 412.0,
+    "y": 380.5,
+    "screenId": "Built-in Retina Display",
+    "timestamp": "2026-05-05T12:34:56.789Z"
+  }
+}
+```
+
+`x` / `y` are top-left logical pixels (the same coordinate space
+`set_position` consumes); `screenId` is `NSScreen.localizedName`. The
+key is set to `null` (not deleted) when the user releases inside the
+100 px snap radius — explicit "use default". On startup the Rust
+setup hook reads the entry, requires `screenId` to match the current
+main display, and requires the whole 240×240 window to fit inside
+`visibleFrame` with a 10 px safety margin (S19); failing either
+condition resets to the notch default and clears the entry.
+
+### Capability addition
+
+The drag path calls `Window::set_position` from the frontend, which
+needs the `core:window:allow-set-position` permission. Tauri 2's
+`core:default` set does not include positional mutation, so the
+permission was added explicitly in `src-tauri/capabilities/default.json`.

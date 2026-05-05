@@ -1,0 +1,25 @@
+html,
+body,
+#root {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.settings-window {
+  min-height: 100vh;
+  padding: 32px 40px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
+    sans-serif;
+}
+
+.settings-window h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.settings-placeholder {
+  color: var(--muted-foreground);
+  font-size: 14px;
+}

@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "pet",
@@ -28,6 +29,22 @@
         "minimizable": false,
         "closable": true,
         "focus": false
+      },
+      {
+        "label": "settings",
+        "title": "Notchi 设置",
+        "url": "settings.html",
+        "width": 720,
+        "height": 480,
+        "minWidth": 560,
+        "minHeight": 360,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "visible": false,
+        "titleBarStyle": "Visible"
       }
     ],
     "security": {

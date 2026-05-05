@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import type {
   GroupRow,
+  Period,
   SessionRow,
   SettingsBundle,
   TimeseriesPoint,
@@ -20,10 +21,11 @@ import {
 } from "../lib/format";
 
 interface OverviewState {
-  today: TokenSummary | null;
-  // For yesterday compare we use the week timeseries' daily buckets.
+  summary: TokenSummary | null;
+  // For yesterday-compare we always pull the week timeseries' daily
+  // buckets — independent of the period selection.
   weekSeries: TimeseriesPoint[];
-  todaySeries: TimeseriesPoint[];
+  series: TimeseriesPoint[];
   bySource: GroupRow[];
   byModel: GroupRow[];
   recent: SessionRow[];
@@ -33,9 +35,9 @@ interface OverviewState {
 }
 
 const EMPTY: OverviewState = {
-  today: null,
+  summary: null,
   weekSeries: [],
-  todaySeries: [],
+  series: [],
   bySource: [],
   byModel: [],
   recent: [],
@@ -46,11 +48,24 @@ const EMPTY: OverviewState = {
 
 const REFRESH_MS = 60_000;
 
+const PERIOD_OPTIONS: ReadonlyArray<{ id: Period; label: string }> = [
+  { id: "today", label: "Today" },
+  { id: "week", label: "Week" },
+  { id: "month", label: "Month" },
+];
+
+const PERIOD_DIST_TITLE: Record<Period, string> = {
+  today: "Hourly distribution",
+  week: "Daily distribution (7d)",
+  month: "Daily distribution (30d)",
+};
+
 interface Props {
   onJumpToBudget: () => void;
 }
 
 export function OverviewPanel({ onJumpToBudget }: Props) {
+  const [period, setPeriod] = useState<Period>("today");
   const [s, setS] = useState<OverviewState>(EMPTY);
 
   useEffect(() => {
@@ -58,29 +73,33 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
     let timer: number | null = null;
 
     const load = async () => {
+      // Show a quick loading state when the period changes; the spinner
+      // flicker is bounded to <200ms on the worst path because every
+      // call hits the local SQLite pool.
+      setS((prev) => ({ ...prev, loading: true }));
       try {
         const [
-          today,
+          summary,
+          series,
           weekSeries,
-          todaySeries,
           bySource,
           byModel,
           recent,
           settings,
         ] = await Promise.all([
-          invoke<TokenSummary>("token_summary", { period: "today" }),
+          invoke<TokenSummary>("token_summary", { period }),
+          invoke<TimeseriesPoint[]>("token_timeseries", { period }),
           invoke<TimeseriesPoint[]>("token_timeseries", { period: "week" }),
-          invoke<TimeseriesPoint[]>("token_timeseries", { period: "today" }),
-          invoke<GroupRow[]>("token_by_source", { period: "today" }),
-          invoke<GroupRow[]>("token_by_model", { period: "today" }),
+          invoke<GroupRow[]>("token_by_source", { period }),
+          invoke<GroupRow[]>("token_by_model", { period }),
           invoke<SessionRow[]>("recent_sessions", { limit: 5 }),
           invoke<SettingsBundle>("get_settings"),
         ]);
         if (cancelled) return;
         setS({
-          today,
+          summary,
           weekSeries,
-          todaySeries,
+          series,
           bySource,
           byModel,
           recent,
@@ -100,7 +119,7 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
       cancelled = true;
       if (timer !== null) window.clearInterval(timer);
     };
-  }, []);
+  }, [period]);
 
   const yesterday = useMemo(() => {
     const d = new Date();
@@ -140,19 +159,30 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
     );
   }
 
-  const todayTokens =
-    s.today != null ? s.today.total_input + s.today.total_output : 0;
-  const todayCost = s.today ? Number.parseFloat(s.today.total_cost_usd) : 0;
+  const totalTokens =
+    s.summary != null ? s.summary.total_input + s.summary.total_output : 0;
+  const totalCost = s.summary ? Number.parseFloat(s.summary.total_cost_usd) : 0;
+  // Day-over-day delta only makes sense for the Today period; for
+  // Week/Month we hide the chip to avoid implying a comparison we
+  // didn't actually compute.
   const yTokens = yesterday?.tokens ?? 0;
   const yCost = yesterday ? Number.parseFloat(yesterday.cost_usd) : 0;
-  const tokenDelta = percentChange(todayTokens, yTokens);
-  const costDelta = percentChange(todayCost, yCost);
+  const tokenDelta =
+    period === "today" ? percentChange(totalTokens, yTokens) : undefined;
+  const costDelta =
+    period === "today" ? percentChange(totalCost, yCost) : undefined;
+  const eyebrow =
+    period === "today"
+      ? "Today"
+      : period === "week"
+        ? "Last 7 days"
+        : "This month";
 
   return (
     <div className="ov-root">
       <header className="ov-header">
         <div>
-          <span className="ov-eyebrow">Today</span>
+          <span className="ov-eyebrow">{eyebrow}</span>
           <h2 className="ov-title">Notchi</h2>
         </div>
         <span className="ov-date">{todayDateLabel()}</span>
@@ -161,33 +191,42 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
       <div className="ov-cards">
         <Card
           label="Tokens"
-          value={formatTokens(todayTokens)}
+          value={formatTokens(totalTokens)}
           delta={tokenDelta}
         />
-        <Card label="Cost" value={formatCost(todayCost)} delta={costDelta} />
+        <Card label="Cost" value={formatCost(totalCost)} delta={costDelta} />
         <Card
           label="Sessions"
-          value={s.today ? `${s.today.session_count}` : "—"}
+          value={s.summary ? `${s.summary.session_count}` : "—"}
         />
         <Card
           label="Top model"
-          value={formatModel(s.today?.dominant_model ?? null)}
+          value={formatModel(s.summary?.dominant_model ?? null)}
           mono={false}
         />
       </div>
 
       <section className="ov-section">
         <header className="ov-section-head">
-          <h3>Hourly distribution</h3>
-          <span className="ov-pill is-active">Today</span>
-          <span className="ov-pill is-disabled" title="Coming in v1.x">
-            Week
-          </span>
-          <span className="ov-pill is-disabled" title="Coming in v1.x">
-            Month
-          </span>
+          <h3>{PERIOD_DIST_TITLE[period]}</h3>
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={
+                "ov-pill ov-pill-btn" + (opt.id === period ? " is-active" : "")
+              }
+              aria-pressed={opt.id === period}
+              onClick={() => setPeriod(opt.id)}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {s.loading ? (
+            <span className="ov-loading-dot" aria-hidden="true" />
+          ) : null}
         </header>
-        <HourlyChart series={s.todaySeries} />
+        <DistributionChart period={period} series={s.series} />
       </section>
 
       <div className="ov-grid-2">
@@ -270,31 +309,75 @@ function Card({
   );
 }
 
-function HourlyChart({ series }: { series: TimeseriesPoint[] }) {
-  // Densify to 24 hour buckets so the chart is always fully populated;
-  // missing hours render as 0 bars.
+function DistributionChart({
+  period,
+  series,
+}: {
+  period: Period;
+  series: TimeseriesPoint[];
+}) {
+  // Today → 24 hourly buckets. Week → trailing 7 daily buckets.
+  // Month → daily buckets from the start of the current calendar
+  // month (matches `Period::Month`'s `start of month` lower bound).
   const data = useMemo(() => {
-    const byHour = new Map<number, number>();
-    for (const p of series) {
-      const h = new Date(p.bucket).getHours();
-      byHour.set(h, (byHour.get(h) ?? 0) + p.tokens);
+    if (period === "today") {
+      const byHour = new Map<number, number>();
+      for (const p of series) {
+        const h = new Date(p.bucket).getHours();
+        byHour.set(h, (byHour.get(h) ?? 0) + p.tokens);
+      }
+      return Array.from({ length: 24 }, (_, i) => ({
+        key: String(i).padStart(2, "0"),
+        label: `${String(i).padStart(2, "0")}:00`,
+        tokens: byHour.get(i) ?? 0,
+      }));
     }
-    return Array.from({ length: 24 }, (_, i) => ({
-      hour: i,
-      tokens: byHour.get(i) ?? 0,
-    }));
-  }, [series]);
+
+    const byDay = new Map<string, number>();
+    for (const p of series) {
+      byDay.set(p.bucket, (byDay.get(p.bucket) ?? 0) + p.tokens);
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days: { key: string; label: string; tokens: number }[] = [];
+    if (period === "week") {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        days.push({
+          key,
+          label: `${d.getMonth() + 1}/${d.getDate()}`,
+          tokens: byDay.get(key) ?? 0,
+        });
+      }
+    } else {
+      // month: from the 1st of the current month through today.
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      for (let d = new Date(first); d <= today; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        days.push({
+          key,
+          label: `${d.getDate()}`,
+          tokens: byDay.get(key) ?? 0,
+        });
+      }
+    }
+    return days;
+  }, [period, series]);
+
+  const xInterval = period === "today" ? 5 : period === "week" ? 0 : 4;
 
   return (
     <div className="ov-chart-wrap">
       <ResponsiveContainer width="100%" height={88}>
         <BarChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
           <XAxis
-            dataKey="hour"
+            dataKey="label"
             tick={{ fontSize: 10, fill: "var(--ov-axis)" }}
             tickLine={false}
             axisLine={false}
-            interval={5}
+            interval={xInterval}
           />
           <Tooltip
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
@@ -305,7 +388,7 @@ function HourlyChart({ series }: { series: TimeseriesPoint[] }) {
               backdropFilter: "blur(20px)",
             }}
             formatter={(v) => [formatTokens(Number(v) || 0), "tokens"]}
-            labelFormatter={(h) => `${String(h).padStart(2, "0")}:00`}
+            labelFormatter={(label) => String(label)}
           />
           <Bar dataKey="tokens" fill="var(--ov-accent)" radius={[3, 3, 0, 0]} />
         </BarChart>

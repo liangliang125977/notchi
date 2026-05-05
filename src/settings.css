@@ -275,6 +275,42 @@ body {
   cursor: not-allowed;
 }
 
+.ov-pill-btn {
+  appearance: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.ov-pill-btn:hover:not(.is-active) {
+  background: rgba(0, 0, 0, 0.09);
+}
+
+.ov-loading-dot {
+  margin-left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sp-accent);
+  opacity: 0.45;
+  animation: ov-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes ov-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
 .ov-link-btn {
   margin-left: auto;
   appearance: none;

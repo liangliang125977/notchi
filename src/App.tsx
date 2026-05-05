@@ -5,6 +5,7 @@ import { PetFallbackImage } from "./components/PetFallbackImage";
 import { L2Capsule } from "./components/L2Capsule";
 import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
+import { EvolutionBadge } from "./components/EvolutionBadge";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
 import { useColorTone } from "./hooks/useColorTone";
@@ -45,6 +46,7 @@ function App() {
       </div>
       <L2Capsule visible={expanded} />
       <PetBubble />
+      <EvolutionBadge />
       <WelcomeCard />
     </div>
   );

@@ -1,0 +1,69 @@
+// Shared TypeScript shapes mirroring the Rust structs in
+// `src-tauri/src/data/{commands,queries}.rs`. Keeping them in one
+// place avoids drift between SettingsApp / overview cards / L2 capsule.
+
+export type IngestStatus = {
+  events_count: number;
+  jsonl_files_watched: number;
+  last_ingest_at: string | null;
+  errors_today: number;
+  claude_code_data_dir: string | null;
+  claude_code_found: boolean;
+};
+
+export type TokenSummary = {
+  total_input: number;
+  total_output: number;
+  total_cache_read: number;
+  total_cache_creation: number;
+  total_cost_usd: string;
+  session_count: number;
+  dominant_model: string | null;
+};
+
+export type TimeseriesPoint = {
+  bucket: string;
+  tokens: number;
+  cost_usd: string;
+};
+
+export type GroupRow = {
+  key: string;
+  tokens: number;
+  percentage: number;
+};
+
+export type SessionRow = {
+  session_id: string;
+  started_at: string;
+  total_tokens: number;
+  cost_usd: string;
+  model: string;
+  project_path: string | null;
+};
+
+export type PricingEntry = {
+  model: string;
+  endpoint_id: string;
+  input_per_mtok: string;
+  output_per_mtok: string;
+  cache_read_per_mtok: string;
+  cache_write_per_mtok: string;
+};
+
+export type SettingsBundle = {
+  claude_code_data_dir: string | null;
+  claude_code_found: boolean;
+  mute_window_start: string | null;
+  mute_window_end: string | null;
+  monthly_budget_usd: number | null;
+  events_count: number;
+};
+
+export type SettingsPatch = {
+  monthly_budget_usd?: number | null;
+  mute_window_start?: string | null;
+  mute_window_end?: string | null;
+};
+
+export type Period = "today" | "week" | "month";

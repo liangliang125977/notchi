@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capability for the pet and settings windows",
   "windows": ["pet", "settings"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": ["core:default", "opener:default", "store:default"]
 }

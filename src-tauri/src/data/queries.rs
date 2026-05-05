@@ -23,11 +23,16 @@ impl Period {
     /// SQLite expression evaluating to the lower bound of the period
     /// (UTC). All `events.timestamp` values are ISO-8601 in UTC, so
     /// SQLite's `datetime()` ordering is correct.
+    ///
+    /// "Month" intentionally means **trailing 30 days**, not calendar
+    /// start-of-month. Calendar months gave a confusing UX early in
+    /// the month (sparse charts) and matched the chart's "Daily
+    /// distribution (30d)" label only by accident.
     pub fn lower_bound_sql(self) -> &'static str {
         match self {
             Period::Today => "datetime('now', 'start of day')",
             Period::Week => "datetime('now', '-7 days')",
-            Period::Month => "datetime('now', 'start of month')",
+            Period::Month => "datetime('now', '-30 days')",
         }
     }
 }

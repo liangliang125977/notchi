@@ -23,3 +23,34 @@ body,
   color: var(--muted-foreground);
   font-size: 14px;
 }
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.settings-field-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-select {
+  appearance: auto;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.settings-hint {
+  margin: 6px 0 0 0;
+  color: var(--muted-foreground, #888);
+  font-size: 12px;
+}

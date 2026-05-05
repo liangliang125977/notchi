@@ -316,6 +316,74 @@ body,
   }
 }
 
+/* ─── Pet bubble (SPEC §5.6 R1/R2) ─────────────────────────────── */
+
+.pet-bubble {
+  position: absolute;
+  top: 8px;
+  left: 120px;
+  transform: translateX(-50%);
+  max-width: 200px;
+  padding: 7px 12px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 12px 24px rgba(0, 0, 0, 0.08);
+  color: rgba(20, 20, 20, 0.92);
+  font-size: 13px;
+  font-weight: 500;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 1.32;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.pet-bubble-text {
+  display: inline-block;
+  max-width: 176px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pet-bubble-arrow {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  width: 10px;
+  height: 6px;
+  transform: translateX(-50%);
+  background: inherit;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  -webkit-backdrop-filter: inherit;
+  backdrop-filter: inherit;
+  box-shadow: 0 0.5px 0 0 rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pet-bubble {
+    background: rgba(28, 28, 30, 0.82);
+    color: rgba(245, 245, 247, 0.95);
+    box-shadow:
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 0 0 0.5px rgba(0, 0, 0, 0.5),
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 12px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
 /* ─── Welcome card (SPEC §4 S17) ───────────────────────────────── */
 
 .welcome-card {

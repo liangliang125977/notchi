@@ -4,10 +4,12 @@ import { PetCanvas } from "./components/PetCanvas";
 import { PetFallbackImage } from "./components/PetFallbackImage";
 import { L2Capsule } from "./components/L2Capsule";
 import { WelcomeCard } from "./components/WelcomeCard";
+import { PetBubble } from "./components/PetBubble";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
 import { useColorTone } from "./hooks/useColorTone";
 import { usePetHoverExpand } from "./hooks/usePetHoverExpand";
+import { useEmotionEngine } from "./hooks/useEmotionEngine";
 import { usePetStore } from "./stores/petStore";
 
 function App() {
@@ -20,6 +22,7 @@ function App() {
   // functionality).
   usePetWindowDrag({ targetRef: petSlotRef });
   useFallbackEvents();
+  useEmotionEngine();
 
   const { filter } = useColorTone();
   const { expanded } = usePetHoverExpand({ rootRef: wrapperRef });
@@ -41,6 +44,7 @@ function App() {
         {renderMode === "live2d" ? <PetCanvas /> : <PetFallbackImage />}
       </div>
       <L2Capsule visible={expanded} />
+      <PetBubble />
       <WelcomeCard />
     </div>
   );

@@ -6,9 +6,21 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![greet]);
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.setup(|app| {
+        // SPEC §6.7 D1: hide from Dock and Cmd-Tab. Mirrors the
+        // LSUIElement=true bundled Info.plist for the dev build,
+        // where the dev binary runs unbundled and would otherwise
+        // appear in the Dock.
+        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+        Ok(())
+    });
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

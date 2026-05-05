@@ -4,6 +4,53 @@ This file records SPEC ambiguities, fallback decisions, and noteworthy
 deviations encountered while implementing Coding Pet. Per `CLAUDE.md`, AI
 agents must log here rather than guess.
 
+## 2026-05-06 — v1.0 step 2 (Claude Desktop adapter)
+
+### Claude Desktop = embedded Claude Code agent + audit signature
+
+The Claude Desktop app on macOS embeds the Claude Code agent runtime
+and writes per-session `audit.jsonl` files under
+`~/Library/Application Support/Claude/local-agent-mode-sessions/<plugin>/<bucket>/local_<session>/`.
+
+The on-wire shape mirrors `~/.claude/projects/*.jsonl` (same `type`
+enum: `assistant | user | system | result | …`, same `message.usage`
+sub-keys: `input_tokens / output_tokens / cache_read_input_tokens /
+cache_creation_input_tokens`, same `message.stop_reason` semantics).
+Three differences keep us from sharing one adapter:
+
+1. `session_id` is snake_case, not `sessionId`.
+2. The timestamp lives in `_audit_timestamp` (root level), not
+   `timestamp`. Each row is also signed with `_audit_hmac`.
+3. There is no `cwd` field — Desktop sessions don't surface a project
+   path to us.
+
+Each Desktop session also drops a parallel `.claude/projects/<encoded
+cwd>/*.jsonl` tree underneath itself. Those rows are non-token bearing
+(`type=last-prompt | queue-operation | attachment | …`) and lack
+`_audit_timestamp`. Our adapter requires the audit timestamp to be
+present so the recursive walker can sweep the whole subtree harmlessly
+— non-audit rows return `None`.
+
+Adapter implementation:
+
+- `src-tauri/src/data/sources/claude_desktop.rs` (new).
+- `discover_paths` returns the single `~/Library/Application
+  Support/Claude/local-agent-mode-sessions` root when present.
+- Source name `claude-desktop` so the L3 "By tool" breakdown shows
+  Claude Desktop usage separately from Claude Code CLI.
+- Pricing reuses the Anthropic seed already in the `pricing` table.
+- `_audit_hmac` is parsed but discarded; we never log file paths or
+  message content.
+
+### Manual implementation rationale
+
+The v1.0 step 2 sub-agent hit the daily quota immediately after probing
+data layout. Schema reverse-engineering and adapter wiring were
+performed inline. No new automated tests (the existing adapters don't
+have any either); verification is by production ingest counts —
+events show up under `source='claude-desktop'` once Desktop has been
+used.
+
 ## 2026-05-05 — v1.0 (multi-source ingest)
 
 ### Codex jsonl schema reverse-engineered

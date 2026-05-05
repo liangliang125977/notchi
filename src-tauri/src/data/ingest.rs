@@ -27,8 +27,9 @@ use walkdir::WalkDir;
 use super::pricing::{self, Pricing};
 use super::sessions::{CompletionEvent, SessionTracker};
 use super::sources::{
-    self, claude_code::ClaudeCodeAdapter, codex::CodexAdapter, cursor::CursorAdapter,
-    opencode::OpenCodeAdapter, DataSourceAdapter, EventKind as ParsedKind, ParseAdapter,
+    self, claude_code::ClaudeCodeAdapter, claude_desktop::ClaudeDesktopAdapter,
+    codex::CodexAdapter, cursor::CursorAdapter, opencode::OpenCodeAdapter, DataSourceAdapter,
+    EventKind as ParsedKind, ParseAdapter,
     ParsedEvent,
 };
 use super::{db, IngestStatus, SourceStatus};
@@ -58,6 +59,14 @@ pub fn resolve_sources<R: Runtime>(app: &AppHandle<R>) -> Vec<sources::ResolvedA
         out.push(sources::ResolvedAdapter {
             adapter: Arc::new(codex),
             paths: codex_paths,
+        });
+    }
+    let claude_desktop = ClaudeDesktopAdapter;
+    let claude_desktop_paths = claude_desktop.discover_paths(app);
+    if !claude_desktop_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(claude_desktop),
+            paths: claude_desktop_paths,
         });
     }
     // OpenCode + Cursor stubs reserved for v1.0 step 2. Their

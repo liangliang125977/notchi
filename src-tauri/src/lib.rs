@@ -94,7 +94,9 @@ pub fn run() {
             data::commands::set_pricing_entry,
             data::commands::ingest_status,
             data::commands::get_settings,
+            data::commands::set_settings,
             data::commands::set_claude_code_data_dir,
+            data::commands::clear_all_events,
             data::commands::rescan_now,
         ])
         .setup(|app| {

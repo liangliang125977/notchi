@@ -98,6 +98,8 @@ pub struct SettingsBundle {
     pub claude_code_found: bool,
     pub mute_window_start: Option<String>,
     pub mute_window_end: Option<String>,
+    pub monthly_budget_usd: Option<f64>,
+    pub events_count: i64,
 }
 
 #[tauri::command]
@@ -109,19 +111,89 @@ pub async fn get_settings(
     // Pull a couple of optional settings so the UI side has one entry
     // point rather than calling tauri-plugin-store directly for every
     // key; only the keys T2 cares about live here.
-    let (mute_start, mute_end) = match app.store(SETTINGS_STORE) {
+    let (mute_start, mute_end, budget) = match app.store(SETTINGS_STORE) {
         Ok(store) => (
-            store.get("muteWindowStart").and_then(|v| v.as_str().map(|s| s.to_string())),
-            store.get("muteWindowEnd").and_then(|v| v.as_str().map(|s| s.to_string())),
+            store
+                .get("muteWindowStart")
+                .and_then(|v| v.as_str().map(|s| s.to_string())),
+            store
+                .get("muteWindowEnd")
+                .and_then(|v| v.as_str().map(|s| s.to_string())),
+            store.get("monthlyBudgetUsd").and_then(|v| v.as_f64()),
         ),
-        Err(_) => (None, None),
+        Err(_) => (None, None, None),
     };
     Ok(SettingsBundle {
         claude_code_data_dir: s.claude_code_data_dir,
         claude_code_found: s.claude_code_found,
         mute_window_start: mute_start,
         mute_window_end: mute_end,
+        monthly_budget_usd: budget,
+        events_count: s.events_count,
     })
+}
+
+/// Persist user-facing settings (monthly budget + mute window). Each
+/// field is optional; omitted fields are left untouched. Pricing
+/// edits go through `set_pricing_entry`; data-dir through
+/// `set_claude_code_data_dir`.
+#[derive(serde::Deserialize)]
+pub struct SettingsPatch {
+    #[serde(default)]
+    pub monthly_budget_usd: Option<f64>,
+    #[serde(default)]
+    pub mute_window_start: Option<String>,
+    #[serde(default)]
+    pub mute_window_end: Option<String>,
+}
+
+#[tauri::command]
+pub async fn set_settings(
+    app: tauri::AppHandle,
+    patch: SettingsPatch,
+) -> Result<(), String> {
+    let store = app.store(SETTINGS_STORE).map_err(|e| e.to_string())?;
+    if let Some(b) = patch.monthly_budget_usd {
+        store.set(
+            "monthlyBudgetUsd",
+            serde_json::Number::from_f64(b)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
+        );
+    }
+    if let Some(s) = patch.mute_window_start {
+        store.set("muteWindowStart", serde_json::Value::String(s));
+    }
+    if let Some(e) = patch.mute_window_end {
+        store.set("muteWindowEnd", serde_json::Value::String(e));
+    }
+    Ok(())
+}
+
+/// SPEC §4 / settings — wipe the events table and reset ingest
+/// bookkeeping so the next watcher tick rebuilds from scratch.
+#[tauri::command]
+pub async fn clear_all_events(state: State<'_, DataState>) -> Result<(), String> {
+    sqlx::query("DELETE FROM events")
+        .execute(pool_of(&state))
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM ingest_state")
+        .execute(pool_of(&state))
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM parse_errors_today")
+        .execute(pool_of(&state))
+        .await
+        .map_err(|e| e.to_string())?;
+    {
+        let mut s = state.status.lock().await;
+        s.events_count = 0;
+        s.errors_today = 0;
+        s.last_ingest_at = None;
+    }
+    state.rescan.notify_one();
+    Ok(())
 }
 
 /// SPEC §4 S18 — let the user point Notchi at a manually chosen

@@ -18,6 +18,7 @@ pub mod ingest;
 pub mod pricing;
 pub mod queries;
 pub mod sessions;
+pub mod species;
 
 use std::sync::Arc;
 

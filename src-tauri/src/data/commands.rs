@@ -11,6 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 use super::queries::{self, GroupRow, Period, PricingEntry, SessionRow, TimeseriesPoint, TokenSummary};
 use super::sessions::SessionTracker;
+use super::species::{self, SpeciesStatus};
 use super::{ingest, DataState, IngestStatus};
 
 const SETTINGS_STORE: &str = "settings.json";
@@ -99,6 +100,16 @@ pub async fn set_pricing_entry(
 #[tauri::command]
 pub async fn ingest_status(state: State<'_, DataState>) -> Result<IngestStatus, String> {
     Ok(state.status.lock().await.clone())
+}
+
+/// SPEC §3 v1.2 — current species inferred from the user's top
+/// project. Cheap on the SQL side; the language classifier walks the
+/// FS so it's fired on demand from the pet badge, not on every event.
+#[tauri::command]
+pub async fn species_status(state: State<'_, DataState>) -> Result<SpeciesStatus, String> {
+    species::compute(pool_of(&state))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[derive(serde::Serialize)]

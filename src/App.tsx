@@ -3,6 +3,7 @@ import "./App.css";
 import { PetCanvas } from "./components/PetCanvas";
 import { PetFallbackImage } from "./components/PetFallbackImage";
 import { L2Capsule } from "./components/L2Capsule";
+import { SpeciesBadge } from "./components/SpeciesBadge";
 import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
@@ -44,6 +45,7 @@ function App() {
         {renderMode === "live2d" ? <PetCanvas /> : <PetFallbackImage />}
       </div>
       <L2Capsule visible={expanded} />
+      <SpeciesBadge />
       <PetBubble />
       <WelcomeCard />
     </div>

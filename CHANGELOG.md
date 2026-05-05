@@ -166,3 +166,60 @@ The `CubismWebSamples` GitHub repo does **not** contain the model
 binaries — `Samples/Resources/` is empty in git and Live2D distributes
 the samples only as zip archives via their CDN. This is why we vendor
 straight from the zip rather than via git submodule.
+
+## 2026-05-05 — T1.5 (action state machine)
+
+### Mao_Pro motion + parameter inventory
+
+**SPEC reference:** §5.2 L1 动作集 (`idle` / `coding` / `waiting` /
+`done` / `sleep`).
+
+Motions actually shipped in `mao_pro.model3.json`:
+
+| Group | Index | File |
+|---|---|---|
+| `Idle` | 0 | `motions/mtn_01.motion3.json` |
+| `""` (no group key) | 0 | `motions/mtn_02.motion3.json` |
+| `""` | 1 | `motions/mtn_03.motion3.json` |
+| `""` | 2 | `motions/mtn_04.motion3.json` |
+| `""` | 3 | `motions/special_01.motion3.json` |
+| `""` | 4 | `motions/special_02.motion3.json` |
+| `""` | 5 | `motions/special_03.motion3.json` |
+
+Total: 1 idle motion + 6 free-form motions. Mao_Pro does **not** ship
+distinct semantic groups (e.g. `TapBody`, `Coding`, `Waiting`); SPEC
+§5.2's five action labels must be mapped onto these by hand.
+
+Relevant parameter IDs from `mao_pro.cdi3.json`:
+- `ParamEyeLOpen`, `ParamEyeROpen` — eyelid (0 = closed, 1 = open)
+- `ParamBreath` — breath cycle (driver of idle chest movement)
+- `ParamMouthOpenY` is **NOT** in the cdi3 — Mao_Pro uses `ParamA` (lip
+  sync amplitude), `ParamMouthUp`, `ParamMouthDown`, `ParamMouthAngry`.
+  We do not override mouth params for T1.5 (sleep cares only about
+  eyelids).
+
+### T1.5 action mapping
+
+| Action | Implementation |
+|---|---|
+| `idle` | `motion('Idle', 0, FORCE)` and clear all parameter overrides |
+| `coding` | `motion('', 1, FORCE)` (mtn_03) — mid-tempo arm sway |
+| `waiting` | `motion('', 4, FORCE)` (special_02) — looking-around / arms-up gesture |
+| `done` | `motion('', 5, FORCE)` (special_03) — celebratory bounce |
+| `sleep` | Stop motion playback; per-frame override `ParamEyeLOpen=0`, `ParamEyeROpen=0`; leave `ParamBreath` untouched (its default cycle is already gentle, fine for MVP) |
+
+The picks are best-guess by file naming + the Cubism Sample marketing
+material. Visual fitness of each special_* is subjective — MVP goal is
+**5 visually distinct buttons**, not perfect semantic match. SPEC §5.2
+accepts "动作" without prescribing exact motion files; this mapping is
+documented here for v1.x revisit.
+
+### Cross-window action signalling
+
+Settings and Pet are two separate Tauri webviews. Zustand state in one
+window does not propagate to the other. T1.5's debug panel lives in
+Settings but the Live2D model lives in Pet, so the panel emits a
+`pet:set-action` Tauri event with `{ action: PetAction }` payload. The
+pet window listens via `@tauri-apps/api/event::listen` and writes into
+its local `petStore`. No new Rust commands needed; `core:default` covers
+event emit/listen.

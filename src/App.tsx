@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import "./App.css";
 import { PetCanvas } from "./components/PetCanvas";
 import { PetFallbackImage } from "./components/PetFallbackImage";
@@ -6,13 +6,20 @@ import { L2Capsule } from "./components/L2Capsule";
 import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
 import { EvolutionBadge } from "./components/EvolutionBadge";
+import { EvolutionBurst } from "./components/EvolutionBurst";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
 import { useColorTone } from "./hooks/useColorTone";
 import { usePetHoverExpand } from "./hooks/usePetHoverExpand";
 import { useEmotionEngine } from "./hooks/useEmotionEngine";
-import { usePetStatus } from "./hooks/usePetStatus";
+import { usePetStatus, type EvolutionStage } from "./hooks/usePetStatus";
 import { usePetStore } from "./stores/petStore";
+
+const STAGE_BUBBLE: Record<EvolutionStage, string> = {
+  0: "孵化中…🥚",
+  1: "破壳啦！🐣",
+  2: "成体了！✨",
+};
 
 // v1.1 — three stage outline filters. Egg gets a soft warm aura,
 // Hatchling a brighter golden glow, Adult a stronger blue-shifted halo.
@@ -44,9 +51,21 @@ function App() {
 
   const { filter } = useColorTone();
   const { expanded } = usePetHoverExpand({ rootRef: wrapperRef });
-  const { status: petStatus } = usePetStatus();
+  const {
+    status: petStatus,
+    evolutionUp,
+    acknowledgeEvolutionUp,
+  } = usePetStatus();
   const stageOutline = stageFilter(petStatus?.evolution.stage);
   const composedFilter = [filter, stageOutline].filter(Boolean).join(" ");
+
+  const showBubble = usePetStore((s) => s.showBubble);
+  const setAction = usePetStore((s) => s.setAction);
+  useEffect(() => {
+    if (evolutionUp == null) return;
+    setAction("done");
+    showBubble(STAGE_BUBBLE[evolutionUp], 4000);
+  }, [evolutionUp, setAction, showBubble]);
 
   return (
     <div
@@ -67,6 +86,7 @@ function App() {
       <L2Capsule visible={expanded} />
       <PetBubble />
       <EvolutionBadge />
+      <EvolutionBurst stage={evolutionUp} onDone={acknowledgeEvolutionUp} />
       <WelcomeCard />
     </div>
   );

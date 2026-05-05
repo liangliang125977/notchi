@@ -612,3 +612,40 @@ body,
     background: rgba(10, 132, 255, 0.85);
   }
 }
+
+/* v1.1 polish — evolution burst overlay (one-shot animation when the
+   pet advances a stage). Anchored to the pet window centre, particles
+   spread outward and fade. Pointer-events:none so it never blocks
+   drag/click. */
+.evolution-burst {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 6;
+}
+.evolution-burst-glyph {
+  position: absolute;
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 220, 100, 0.85));
+  pointer-events: none;
+}
+.evolution-burst-center {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(255, 230, 150, 0.95))
+    drop-shadow(0 0 24px rgba(255, 200, 80, 0.55));
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .evolution-burst-glyph {
+    filter: drop-shadow(0 0 7px rgba(255, 220, 110, 0.95));
+  }
+  .evolution-burst-center {
+    filter: drop-shadow(0 0 14px rgba(255, 230, 150, 1))
+      drop-shadow(0 0 28px rgba(255, 200, 80, 0.7));
+  }
+}

@@ -4,6 +4,70 @@ This file records SPEC ambiguities, fallback decisions, and noteworthy
 deviations encountered while implementing Coding Pet. Per `CLAUDE.md`, AI
 agents must log here rather than guess.
 
+## 2026-05-05 — T3.1–T3.4 (emotion + notifications)
+
+### Bubble shows above Mao's head, not on the right
+
+SPEC §5.6 doesn't pin a bubble position. We picked "above Mao's head"
+because the L2 capsule already lives to the right of Mao at hover and
+both sharing that side would overlap when both fire at once. The
+bubble is anchored at `top: 8px; left: 120px` of the 240×240 pet
+window with a downward-pointing tail centred on Mao's forehead.
+
+### Bubble events use Tauri global emit, not a per-window channel
+
+`pet:task-completed` and `pet:pending-input` are emitted by Rust via
+`AppHandle::emit` (broadcast to every webview), and the dev "test
+bubble" buttons in Settings re-emit the same payload shape. Both the
+real path and the dev path therefore exercise the same listener wired
+in `useEmotionEngine`, which avoids drift.
+
+### Backfill does not feed the session tracker
+
+`ingest::backfill` passes `tracker = None`. We don't want the cold
+start to enqueue 30-day-old completion events as bubbles + macOS
+notifications (would spam the user on first launch). Live tail through
+the watcher is the only feeder.
+
+### Pending-input "stale" cap
+
+`SessionTracker::poll_pending_input` ignores sessions that have been
+silent for more than 5 minutes. Past that point the user has clearly
+moved on; bubbles every minute would feel naggy. The 30s/60s/180s
+brackets remain in-range; only sessions older than 5 min get dropped
+from the pending pool until a new user/assistant turn touches them.
+
+### macOS notification permission requested at startup
+
+`useEmotionEngine` calls `ensureNotifyPermission` once on mount
+(memoized). This pre-warms the prompt so it appears alongside the
+welcome card rather than mid-task. If the user denies the prompt, R2
+falls back to bubble-only (no native banner), per SPEC §5.6.
+
+### Quiet hours apply to bubbles only
+
+`isMuted()` lives in `petStore.ts` and gates `showBubble` exclusively.
+macOS notifications keep firing during quiet hours; the user is
+expected to control them via System Settings → Notifications. The
+Settings panel hint reflects this.
+
+### Cross-midnight quiet hours
+
+`isMuted` accepts both `start < end` and `start > end` (e.g. 22:00 →
+09:00). When `start > end` the muted region is `[start, 24:00) ∪
+[00:00, end)`. Equal start/end is treated as "not muted" rather than
+"muted all day" — preserves backwards-compat with the existing
+default 22:00–09:00 in case a user accidentally sets both to 00:00.
+
+### Stop-reason filter
+
+`stop_reason` values that count as "complete" are anything except
+`user_cancelled` and the empty string. We do not whitelist
+`end_turn`/`max_tokens` explicitly because Anthropic occasionally
+introduces new stop reasons (`tool_use`, `pause_turn`, etc.); the
+denylist is forward-compatible and still skips the only case the user
+explicitly initiated (cancel).
+
 ## 2026-05-05 — T2.6–T2.10 (UI layer)
 
 ### L2 expanded window keeps fixed 240 height instead of 100

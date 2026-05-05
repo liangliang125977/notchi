@@ -1,4 +1,10 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+
+#[cfg(target_os = "macos")]
+mod macos;
+
+use tauri::Manager;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -17,6 +23,11 @@ pub fn run() {
         // where the dev binary runs unbundled and would otherwise
         // appear in the Dock.
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+        if let Some(pet) = app.get_webview_window("pet") {
+            macos::apply_pet_window_behaviour(&pet)?;
+        }
+
         Ok(())
     });
 

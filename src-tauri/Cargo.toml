@@ -30,3 +30,13 @@ notify = "8"
 # See CHANGELOG.md (2026-05-05) for the deviation from SPEC §6.6.
 rust_decimal = "1"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = [
+    "NSWindow",
+    "NSResponder",
+    "NSApplication",
+    "NSRunningApplication",
+] }
+objc2-foundation = { version = "0.3", features = ["NSString"] }
+

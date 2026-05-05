@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
   PET_ACTIONS,
+  PET_FORCE_FALLBACK_EVENT,
+  PET_RENDER_MODE_EVENT,
   PET_SET_ACTION_EVENT,
   type PetAction,
+  type PetRenderMode,
+  type PetRenderModePayload,
   type PetSetActionPayload,
 } from "./stores/petStore";
 
@@ -33,6 +37,7 @@ function SettingsApp() {
   const [mode, setMode] = useState<NotchMode>(DEFAULT_MODE);
   const [ready, setReady] = useState(false);
   const [activeAction, setActiveAction] = useState<PetAction>("idle");
+  const [renderMode, setRenderMode] = useState<PetRenderMode>("live2d");
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +62,26 @@ function SettingsApp() {
     };
   }, []);
 
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      try {
+        unlisten = await listen<PetRenderModePayload>(
+          PET_RENDER_MODE_EVENT,
+          (event) => {
+            const next = event.payload?.renderMode;
+            if (next) setRenderMode(next);
+          },
+        );
+      } catch (err) {
+        console.error("[settings] failed to subscribe to render mode", err);
+      }
+    })();
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   async function handleNotchModeChange(next: NotchMode) {
     setMode(next);
     if (!store) return;
@@ -77,9 +102,30 @@ function SettingsApp() {
     }
   }
 
+  async function handleForceFallback() {
+    try {
+      await emit(PET_FORCE_FALLBACK_EVENT);
+    } catch (err) {
+      console.error("[settings] failed to emit force-fallback", err);
+    }
+  }
+
   return (
     <main className="settings-window">
       <h1>Notchi 设置</h1>
+
+      {renderMode === "fallback" ? (
+        <section className="settings-section">
+          <div className="settings-banner settings-banner--warn" role="alert">
+            <span className="settings-banner-icon" aria-hidden="true">
+              ⚠️
+            </span>
+            <span>
+              Live2D 加载失败，已降级为静态图。请重启应用，或检查控制台日志。
+            </span>
+          </div>
+        </section>
+      ) : null}
 
       <section className="settings-section">
         <label className="settings-field" htmlFor="notch-mode">
@@ -121,6 +167,30 @@ function SettingsApp() {
           </div>
           <p className="settings-hint">
             通过 Tauri event 触发宠物窗口动作切换；生产构建不会出现。
+          </p>
+        </section>
+      ) : null}
+
+      {import.meta.env.DEV ? (
+        <section className="settings-section">
+          <span className="settings-field-label">渲染降级（dev only）</span>
+          <div className="action-debug-row">
+            <button
+              type="button"
+              className="action-debug-btn"
+              disabled={renderMode === "fallback"}
+              onClick={handleForceFallback}
+            >
+              强制降级（dev only）
+            </button>
+          </div>
+          <p className="settings-hint">
+            手动触发 SPEC §4 S15 路径；当前渲染模式：
+            <strong>
+              {" "}
+              {renderMode === "fallback" ? "fallback" : "live2d"}
+            </strong>
+            。生产构建不会出现。
           </p>
         </section>
       ) : null}

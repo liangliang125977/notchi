@@ -278,3 +278,84 @@ The drag path calls `Window::set_position` from the frontend, which
 needs the `core:window:allow-set-position` permission. Tauri 2's
 `core:default` set does not include positional mutation, so the
 permission was added explicitly in `src-tauri/capabilities/default.json`.
+
+## 2026-05-05 — T1.7 (Live2D → static PNG degraded render)
+
+### Fallback PNG asset generation: SVG + Chrome headless
+
+**SPEC reference:** §4 S15 ("文件缺失/格式错误/WebGL 初始化失败"
+时降级为静态 PNG，"同款角色 idle/coding/done 三张").
+
+**Strategies considered:**
+1. **Headless Live2D render via puppeteer** — load Mao_Pro in a real
+   Chrome canvas, swap motions, capture `toDataURL`. Faithful to "同款
+   角色" but heavy: needs vite dev server, the Cubism Core IIFE, and a
+   pnpm-installed puppeteer (~150 MB devDep). Brittle on CI.
+2. **Crop the Mao_Pro texture atlas** — the file the user prompt
+   suggested. Investigated and rejected: `mao_pro.4096/texture_00.png`
+   is a parts sheet (head, hair, body fragments tiled across 4096×4096),
+   not a renderable portrait. No crop yields a usable avatar.
+3. **Hand-coded SVG mascot, rasterised via Chrome headless.** Three
+   stylised chibi poses — idle (eyes open, smile), coding (focused,
+   half-lidded, laptop badge), done (closed-eye smile, star badge) —
+   sharing a Mao-inspired palette (blue hair, navy outfit, orange
+   ribbon, peach skin). Rasterised at 480×480 via
+   `chrome --headless=new --screenshot`. No runtime deps, output is
+   reproducible from the script.
+
+**Chosen: option 3.** Total output: 38 KB across 3 PNGs (well under
+SPEC's 1.5 MB allowance). A "FALLBACK · STATE" tag is baked into each
+image so users can tell at a glance they're in degraded mode (the
+banner is the canonical signal; the in-image tag is belt-and-braces).
+
+**Action mapping (PetFallbackImage):**
+- `idle` / `waiting` / `sleep` → `idle@2x.png`
+- `coding` → `coding@2x.png`
+- `done` → `done@2x.png`
+
+The SPEC text only requires three images. `waiting` and `sleep` map
+to `idle` for MVP — visually distinguishing all five states in the
+fallback path was deemed not worth the asset bloat / authoring
+overhead at this stage.
+
+### Render-mode branching + drag wrapper
+
+`PetCanvas` previously owned `usePetWindowDrag` directly. Moved the
+hook one level up to `App.tsx` and split the DOM into a wrapper
+`<div className="pet-canvas">` (drag target) and an inner
+`PetCanvas`/`PetFallbackImage`. This makes drag work identically in
+both render modes — required by S15's "所有功能保持可用" clause.
+
+The `<img>` in `PetFallbackImage` uses `pointer-events: none` so the
+wrapper still receives `pointerdown` for drag; native image drag is
+also disabled via `draggable={false}` and `-webkit-user-drag: none`
+to prevent the browser's image-drag ghost from interfering.
+
+### Settings ↔ pet render-mode signalling
+
+Two webviews share no state, mirroring the T1.5 pattern. The pet
+broadcasts a `pet:render-mode` event on every change (and once on
+mount) so the settings window can show / hide the degraded banner
+even if it opens after an auto-fallback already happened. The dev-
+only "强制降级" button in settings emits a `pet:force-fallback`
+event the pet listens for (`useFallbackEvents`); flipping renderMode
+client-side is enough to verify the full degraded path without
+breaking Live2D assets.
+
+### Verification approach
+
+`pnpm tauri dev` was not run in the agent sandbox. The acceptance path
+was verified by:
+- `pnpm typecheck` clean.
+- `pnpm lint` clean.
+- `cargo clippy ... -D warnings` clean.
+- `pnpm build` produces both bundle entry points without warnings
+  introduced by T1.7.
+- Code review of the failure chain
+  `Live2DModel.from()` reject → `catch` → `setRenderMode("fallback")`
+  → App re-renders with `<PetFallbackImage />`, with the chain
+  identical to the one wired in T1.4.
+
+End-to-end UI verification (deliberate MODEL_URL break + fallback
+banner appearance) is left as a manual check by the user per the
+T1.7 acceptance script.

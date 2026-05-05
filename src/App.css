@@ -66,11 +66,12 @@ body,
 /* ─── L2 capsule (SPEC §5.3) — Dynamic Island style ────────────── */
 
 .l2-capsule {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   align-self: flex-start;
-  margin: 14px 14px 0 0;
-  height: 48px;
-  padding: 0 14px;
+  margin: 14px 14px 0 10px;
+  max-width: calc(100% - 240px - 20px);
+  min-height: 64px;
+  padding: 8px 14px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(28px) saturate(180%);
@@ -85,8 +86,18 @@ body,
     -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
     system-ui, sans-serif;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   pointer-events: none;
+  overflow: hidden;
+}
+
+.l2-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  overflow: hidden;
 }
 
 .l2-row {
@@ -96,8 +107,31 @@ body,
   white-space: nowrap;
   overflow: hidden;
   width: 100%;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+}
+
+.l2-row > * {
+  min-width: 0;
+}
+
+.l2-tokens,
+.l2-cost {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.l2-row-primary {
+  font-size: 12.5px;
+}
+
+.l2-row-secondary {
+  font-size: 13px;
+}
+
+.l2-row-primary .l2-tokens {
+  font-size: 13.5px;
 }
 
 .l2-num,

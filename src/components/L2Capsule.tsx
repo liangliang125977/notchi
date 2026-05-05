@@ -9,11 +9,12 @@ import {
   shortSessionLabel,
 } from "../lib/format";
 
-// SPEC §5.3 — second-level glanceable card, redesigned as a single-row
-// Dynamic Island row to match macOS Sonoma / Raycast / iStat Menus style.
-// Sits in the right half of the expanded 480×240 pet window, top-aligned.
+// SPEC §5.3 — second-level glanceable card, two-row Dynamic Island variant
+// to match macOS Sonoma / Raycast / iStat Menus style. Sits in the right
+// half of the expanded 480×240 pet window, hugging Mao's right edge.
 //
-//   [● Opus 4.7]  509K · $155.26 · ai-coding · 14m
+//   [● Opus 4.7]  509K  ↑12%
+//   $155.26  ·  ● ai-coding  14m
 //
 // Empty fields collapse rather than render placeholders.
 
@@ -63,24 +64,33 @@ function CapsuleRow({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
   const empty = tokens === null && cost === null && !recent;
   if (empty) {
     return (
-      <div className="l2-row">
-        <span className="l2-idle">No activity yet today</span>
+      <div className="l2-rows">
+        <div className="l2-row">
+          <span className="l2-idle">No activity yet today</span>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="l2-row">
-      {modelName ? (
-        <span className={"l2-chip-model l2-fam-" + family}>
-          <span className="l2-chip-dot" aria-hidden="true" />
-          {formatModel(modelName)}
-        </span>
-      ) : null}
+  const hasPrimary = modelName !== null || tokens !== null;
+  const hasSecondary =
+    (cost !== null && Number.isFinite(cost)) || sessionLabel !== null;
 
-      {tokens !== null ? (
-        <>
-          <span className="l2-num l2-tokens">{formatTokens(tokens)}</span>
+  return (
+    <div className="l2-rows">
+      {hasPrimary ? (
+        <div className="l2-row l2-row-primary">
+          {modelName ? (
+            <span className={"l2-chip-model l2-fam-" + family}>
+              <span className="l2-chip-dot" aria-hidden="true" />
+              {formatModel(modelName)}
+            </span>
+          ) : null}
+
+          {tokens !== null ? (
+            <span className="l2-num l2-tokens">{formatTokens(tokens)}</span>
+          ) : null}
+
           {delta !== null ? (
             <span
               className={
@@ -92,35 +102,37 @@ function CapsuleRow({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
               {Math.abs(delta).toFixed(0)}%
             </span>
           ) : null}
-        </>
+        </div>
       ) : null}
 
-      {cost !== null && Number.isFinite(cost) ? (
-        <>
-          <span className="l2-dot-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="l2-num l2-cost">{formatCost(cost)}</span>
-        </>
-      ) : null}
+      {hasSecondary ? (
+        <div className="l2-row l2-row-secondary">
+          {cost !== null && Number.isFinite(cost) ? (
+            <span className="l2-num l2-cost">{formatCost(cost)}</span>
+          ) : null}
 
-      {sessionLabel ? (
-        <>
-          <span className="l2-dot-sep" aria-hidden="true">
-            ·
-          </span>
-          <span
-            className={
-              "l2-session " + (snap.recentActive ? "is-active" : "is-idle")
-            }
-          >
-            {snap.recentActive ? (
-              <span className="l2-pulse" aria-hidden="true" />
-            ) : null}
-            {sessionLabel}
-          </span>
-          {elapsed ? <span className="l2-elapsed">{elapsed}</span> : null}
-        </>
+          {cost !== null && Number.isFinite(cost) && sessionLabel ? (
+            <span className="l2-dot-sep" aria-hidden="true">
+              ·
+            </span>
+          ) : null}
+
+          {sessionLabel ? (
+            <>
+              <span
+                className={
+                  "l2-session " + (snap.recentActive ? "is-active" : "is-idle")
+                }
+              >
+                {snap.recentActive ? (
+                  <span className="l2-pulse" aria-hidden="true" />
+                ) : null}
+                {sessionLabel}
+              </span>
+              {elapsed ? <span className="l2-elapsed">{elapsed}</span> : null}
+            </>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

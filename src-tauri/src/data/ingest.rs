@@ -27,8 +27,9 @@ use walkdir::WalkDir;
 use super::pricing::{self, Pricing};
 use super::sessions::{CompletionEvent, SessionTracker};
 use super::sources::{
-    self, claude_code::ClaudeCodeAdapter, codex::CodexAdapter, DataSourceAdapter,
-    EventKind as ParsedKind, ParseAdapter, ParsedEvent,
+    self, claude_code::ClaudeCodeAdapter, codex::CodexAdapter, cursor::CursorAdapter,
+    opencode::OpenCodeAdapter, DataSourceAdapter, EventKind as ParsedKind, ParseAdapter,
+    ParsedEvent,
 };
 use super::{db, IngestStatus, SourceStatus};
 
@@ -57,6 +58,25 @@ pub fn resolve_sources<R: Runtime>(app: &AppHandle<R>) -> Vec<sources::ResolvedA
         out.push(sources::ResolvedAdapter {
             adapter: Arc::new(codex),
             paths: codex_paths,
+        });
+    }
+    // OpenCode + Cursor stubs reserved for v1.0 step 2. Their
+    // discover_paths intentionally returns empty until we have a real
+    // sample shape to parse.
+    let opencode = OpenCodeAdapter;
+    let opencode_paths = opencode.discover_paths(app);
+    if !opencode_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(opencode),
+            paths: opencode_paths,
+        });
+    }
+    let cursor = CursorAdapter;
+    let cursor_paths = cursor.discover_paths(app);
+    if !cursor_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(cursor),
+            paths: cursor_paths,
         });
     }
     out

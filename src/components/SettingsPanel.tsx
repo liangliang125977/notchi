@@ -137,11 +137,37 @@ export function SettingsPanel({ highlightBudget }: Props) {
   }
 
   async function handlePricingSave(entry: PricingEntry) {
+    // v1.3 hardening — frontend validation. We accept decimal strings
+    // and write them as-is; reject anything that wouldn't parse to a
+    // finite, non-negative number. Backend stores as TEXT so this is
+    // the gate that prevents `cost_usd` calculations from later
+    // exploding.
+    const fields: Array<{ key: keyof PricingEntry; label: string }> = [
+      { key: "input_per_mtok", label: "input" },
+      { key: "output_per_mtok", label: "output" },
+      { key: "cache_read_per_mtok", label: "cache read" },
+      { key: "cache_write_per_mtok", label: "cache write" },
+    ];
+    for (const { key, label } of fields) {
+      const raw = entry[key];
+      if (typeof raw !== "string") continue;
+      const trimmed = raw.trim();
+      if (trimmed === "") {
+        flash(`${label} price cannot be empty.`);
+        return;
+      }
+      const n = Number(trimmed);
+      if (!Number.isFinite(n) || n < 0) {
+        flash(`${label} price must be a non-negative number (got "${raw}").`);
+        return;
+      }
+    }
     try {
       await invoke("set_pricing_entry", { entry });
       flash(`Saved ${formatModel(entry.model)}.`);
     } catch (err) {
       console.error("[settings] save pricing", err);
+      flash(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

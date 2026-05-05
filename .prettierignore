@@ -9,3 +9,6 @@ pnpm-lock.yaml
 
 # Tauri-generated capability schemas
 src-tauri/capabilities/
+
+# Vendored Live2D assets (preserve verbatim, not authored by us)
+public/assets/live2d/

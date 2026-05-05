@@ -224,9 +224,9 @@
 ### 5.5 刘海定位行为
 
 **有刘海机型（MacBook Pro 14/16, Air M2/M3 15"）：**
-- 默认位置：刘海正下方居中，紧贴刘海下沿
+- 默认位置：刘海正下方居中
 - 刘海识别：通过 `NSScreen.safeAreaInsets.top` 判定（M 系列起 macOS 12+ 支持）
-- 待机时露出宠物头部，身体藏在刘海下方
+- 待机时**头部 60–80% 露出在刘海下沿**，身体下半部紧贴刘海（决策 D2）
 - 工作动画时身体最多探出 80px，绝不超过状态栏 + 80px
 
 **无刘海机型：**
@@ -278,9 +278,12 @@
 - 不支持 Mac App Store 沙箱（用户直接 dmg 安装）
 
 ### 6.4 资产授权
-- Live2D 模型：使用 CC0 / MIT / 类似宽松授权的社区免费模型
+- **MVP 默认模型：Mao**（Live2D Cubism 官方 Sample，~15 motion，"宠物"气质最强）— 决策 D5
+  - 路径：`public/assets/live2d/mao/`
+  - 授权：Live2D Sample Data License（仅可用于 SDK 学习/演示）
+  - **v2 上 Mac App Store 前必须替换**为：自创模型 / CC0 模型 / 商业授权（已记录 v2 路线图） — 决策 D3
 - 不内嵌付费资产
-- 待选模型清单：Live2D Cubism 官方 Sample（Hiyori, Haru, Mark）— 验证授权后选定
+- 所有第三方资产授权写入 `LICENSE-3RD-PARTY.md`
 
 ### 6.5 分发
 - GitHub Release 发 .dmg
@@ -321,7 +324,24 @@
 | 透明置顶 + `safeAreaInsets` | 使用 `tauri-plugin-window-state` + `objc2` 桥，参考社区现成 issue |
 | Tailwind 4 较新 | fallback 3.4 |
 | 单价计算浮点误差 | Rust 后端用 `rust_decimal` |
-| Live2D 资源版权 | 使用 Cubism 官方 Sample 模型（Hiyori/Haru/Mark），授权在阅读后写入 LICENSE-3RD-PARTY.md |
+| Live2D 资源版权 | MVP 用 Cubism Sample (Mao)，v2 上架前替换；授权写入 LICENSE-3RD-PARTY.md |
+
+### 6.7 实现决策细则（2026-05-05 — T1.2-T1.7 实施前细化）
+
+人工检查点 ② 之后的细节决策，不影响 §4 验收场景：
+
+| 编号 | 决策点 | 选定值 | 影响任务 |
+|---|---|---|---|
+| **D1** | Dock / Cmd-Tab 显示策略 | **完全隐藏**（`LSUIElement = true`）+ 状态栏图标作为唯一显式入口 | T1.2 |
+| **D2** | 宠物垂直露出比例 | 头部 **60–80%** 露出在刘海下沿，身体下半部紧贴刘海 | T1.3 |
+| **D3** | Live2D 资产版权处理时机 | MVP 用 Cubism Sample；v2 上架前必须替换 | T1.4, v2 |
+| **D4** | 拖拽吸附半径 | **100 px** | T1.6 |
+| **D5** | MVP 默认 Live2D 模型 | **Mao**（Cubism 官方 Sample，~15 motion） | T1.4, T1.5 |
+
+**D1 派生需求（T1.2 范围扩展）：**
+- 状态栏图标（NSStatusItem）：左键开/关配置窗、右键菜单（关于、退出、显隐宠物、暂停采集）
+- `Info.plist` 设置 `LSUIElement = true`
+- 主"宠物"窗口与"配置"窗口分离：前者无装饰透明置顶；后者标准 macOS 窗口
 
 ---
 
@@ -396,3 +416,5 @@
 |---|---|---|
 | 2026-05-05 | v1.0 | 初始版本，人工检查点 ① 已确认 |
 | 2026-05-05 | v1.1 | 人工检查点 ② 已确认技术栈：Tauri 2 + React 19 + TS + Tailwind 4 + shadcn/ui + Framer Motion + pixi-live2d-display + Rust(notify+rusqlite)；新增 §6.6 决策、§7 工作量预估 |
+| 2026-05-05 | v1.2 | T1.2-T1.7 实施前细化决策（D1–D5）：Dock 完全隐藏 + 状态栏图标 / 宠物垂直露出 60–80% / Mao 锁定 MVP 模型 / 吸附半径 100px。新增 §6.7、修订 §5.5 与 §6.4 |
+| 2026-05-05 | v1.3 | T1.1 完成，CHANGELOG 记录 `rusqlite` 与 `tauri-plugin-sql(sqlite)` 的 `links="sqlite3"` 冲突，砍掉 `rusqlite` 直接依赖，统一走 `tauri-plugin-sql` 的 sqlx 路径，T2.1 复审 |

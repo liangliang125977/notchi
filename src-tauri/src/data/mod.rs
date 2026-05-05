@@ -17,6 +17,7 @@ pub mod db;
 pub mod ingest;
 pub mod pricing;
 pub mod queries;
+pub mod sessions;
 
 use std::sync::Arc;
 
@@ -29,6 +30,11 @@ pub struct DataState {
     pub pool: SqlitePool,
     pub status: Arc<Mutex<IngestStatus>>,
     pub rescan: Arc<Notify>,
+    /// T3.2/T3.3 — per-session liveness for waiting/done detection.
+    /// Held only to keep the `Arc` alive for the watcher / poll-loop;
+    /// no command currently reads it directly.
+    #[allow(dead_code)]
+    pub sessions: Arc<sessions::SessionTracker>,
 }
 
 #[derive(Default, Debug, Clone, serde::Serialize)]

@@ -10,6 +10,7 @@ use tauri::State;
 use tauri_plugin_store::StoreExt;
 
 use super::queries::{self, GroupRow, Period, PricingEntry, SessionRow, TimeseriesPoint, TokenSummary};
+use super::sessions::SessionTracker;
 use super::{ingest, DataState, IngestStatus};
 
 const SETTINGS_STORE: &str = "settings.json";
@@ -248,6 +249,17 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
         ..Default::default()
     }));
     let rescan = Arc::new(Notify::new());
+    let sessions = Arc::new(SessionTracker::new());
+
+    // T3.2 — pending-input poller runs unconditionally; if no data dir
+    // is configured the tracker simply stays empty.
+    {
+        let app_pi = app.clone();
+        let tr_pi = sessions.clone();
+        tokio::spawn(async move {
+            ingest::run_pending_input_loop(app_pi, tr_pi).await;
+        });
+    }
 
     if let Some(dir) = data_dir {
         let pool_bg = pool.clone();
@@ -262,8 +274,10 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
         let pool_w = pool.clone();
         let st_w = status.clone();
         let rs_w = rescan.clone();
+        let app_w = app.clone();
+        let tr_w = sessions.clone();
         tokio::spawn(async move {
-            if let Err(e) = ingest::run_watcher(pool_w, dir, st_w, rs_w).await {
+            if let Err(e) = ingest::run_watcher(app_w, pool_w, dir, st_w, rs_w, tr_w).await {
                 eprintln!("[ingest] watcher exited: {e}");
             }
         });
@@ -271,5 +285,5 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
         eprintln!("[ingest] ~/.claude/projects not found — S18 manual override required");
     }
 
-    Ok(DataState { pool, status, rescan })
+    Ok(DataState { pool, status, rescan, sessions })
 }

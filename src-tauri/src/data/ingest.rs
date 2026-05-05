@@ -41,11 +41,16 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use sqlx::SqlitePool;
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::{mpsc, Mutex, Notify};
 use walkdir::WalkDir;
 
 use super::pricing::{self, Pricing};
+use super::sessions::{CompletionEvent, SessionTracker};
 use super::{db, IngestStatus};
+
+pub const TASK_COMPLETED_EVENT: &str = "pet:task-completed";
+pub const PENDING_INPUT_EVENT: &str = "pet:pending-input";
 
 const SOURCE_CLAUDE_CODE: &str = "claude-code";
 /// Cap retro-scan to recent 30 days per SPEC §5.7 (S13).
@@ -70,7 +75,20 @@ struct AssistantMessage<'a> {
     id: Option<&'a str>,
     #[serde(borrow)]
     model: Option<&'a str>,
+    #[serde(borrow, rename = "stop_reason")]
+    stop_reason: Option<&'a str>,
     usage: Option<Usage>,
+}
+
+/// Lighter-weight envelope for the session-tracker pass on user rows
+/// (assistant rows go through the typed parse that captures usage too).
+#[derive(Debug, Deserialize)]
+struct UserEnvelope<'a> {
+    #[serde(rename = "type")]
+    ty: Option<&'a str>,
+    timestamp: Option<&'a str>,
+    #[serde(rename = "sessionId")]
+    session_id: Option<&'a str>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -111,6 +129,7 @@ pub fn resolve_data_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<
 struct ParsePass {
     inserted: usize,
     parse_errors: usize,
+    completed: Vec<CompletionEvent>,
 }
 
 /// Parse jsonl bytes starting at `start_offset` and insert assistant
@@ -120,6 +139,7 @@ async fn ingest_file(
     pool: &SqlitePool,
     path: &Path,
     start_offset: u64,
+    tracker: Option<&SessionTracker>,
 ) -> Result<ParsePass, std::io::Error> {
     let bytes = tokio::fs::read(path).await?;
     if (start_offset as usize) >= bytes.len() {
@@ -145,6 +165,7 @@ async fn ingest_file(
     let mut tx = pool.begin().await.map_err(io_other)?;
     let mut inserted = 0usize;
     let mut parse_errors = 0usize;
+    let mut completed: Vec<CompletionEvent> = Vec::new();
     let now_iso = Utc::now().to_rfc3339();
 
     // Cache pricing per model to avoid round-tripping on every line.
@@ -155,6 +176,20 @@ async fn ingest_file(
         if line.is_empty() {
             continue;
         }
+
+        // T3.2 — feed the session tracker on user lines only. Assistant
+        // lines go through the typed parse below so we record token
+        // counts at the same time.
+        if let Some(tr) = tracker {
+            if let Ok(live) = serde_json::from_slice::<UserEnvelope>(line) {
+                if live.ty == Some("user") {
+                    let ts = live.timestamp.and_then(parse_iso);
+                    let sid_for_live = live.session_id.unwrap_or(&session_id);
+                    tr.observe_user(sid_for_live, ts);
+                }
+            }
+        }
+
         let env: AssistantEnvelope = match serde_json::from_slice(line) {
             Ok(v) => v,
             Err(_) => {
@@ -166,6 +201,36 @@ async fn ingest_file(
             continue;
         }
         let Some(msg) = env.message else { continue };
+        let assistant_ts = env.timestamp.and_then(parse_iso);
+        let assistant_sid = env.session_id.unwrap_or(&session_id);
+
+        // Notify tracker even for fragments without usage (so stop_reason
+        // is recorded). For fragments without a stop_reason this is a
+        // cheap last_assistant_at touch which the tracker uses to
+        // measure idle time.
+        let usage_tokens = msg
+            .usage
+            .as_ref()
+            .map(|u| {
+                u.input_tokens
+                    + u.output_tokens
+                    + u.cache_read_input_tokens
+                    + u.cache_creation_input_tokens
+            })
+            .unwrap_or(0);
+        if let Some(tr) = tracker {
+            let res = tr.observe_assistant(
+                assistant_sid,
+                assistant_ts,
+                msg.model,
+                msg.stop_reason,
+                usage_tokens,
+            );
+            if let Some(c) = res.completed {
+                completed.push(c);
+            }
+        }
+
         let Some(usage) = msg.usage else { continue };
         let model = msg.model.unwrap_or("unknown").to_string();
         // Skip rows that look entirely empty (no tokens at all).
@@ -263,7 +328,39 @@ async fn ingest_file(
 
     tx.commit().await.map_err(io_other)?;
     let _ = new_offset; // already persisted in ingest_state row above
-    Ok(ParsePass { inserted, parse_errors })
+    Ok(ParsePass { inserted, parse_errors, completed })
+}
+
+fn parse_iso(s: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+/// T3.2 — periodic poll over the session tracker. Fires
+/// `pet:pending-input` events when a session has been quiet long
+/// enough to cross a 30/60/180-second bracket. Runs forever; cancelled
+/// only when the Tauri app exits.
+pub async fn run_pending_input_loop<R: Runtime>(
+    app: AppHandle<R>,
+    tracker: Arc<SessionTracker>,
+) {
+    let mut ticker = tokio::time::interval(Duration::from_secs(10));
+    ticker.tick().await; // discard the immediate tick
+    loop {
+        ticker.tick().await;
+        let now = Utc::now();
+        // Drain whichever bracket fires first, then loop back through
+        // the rest on the next tick. 10s cadence means at most ~10s of
+        // latency past the bracket, which is well under the bubble
+        // budget.
+        while let Some(ev) = tracker.poll_pending_input(now) {
+            if let Err(e) = app.emit(PENDING_INPUT_EVENT, &ev) {
+                eprintln!("[ingest] failed to emit pending-input event: {e}");
+                break;
+            }
+        }
+    }
 }
 
 fn io_other<E: std::fmt::Display>(e: E) -> std::io::Error {
@@ -335,7 +432,10 @@ pub async fn backfill(
     let mut total_errors = 0usize;
     for path in &files {
         let off = last_offset(&pool, path).await;
-        match ingest_file(&pool, path, off).await {
+        // Backfill intentionally does not feed the tracker — we don't
+        // want bubbles + notifications for events that happened days
+        // ago.
+        match ingest_file(&pool, path, off, None).await {
             Ok(p) => {
                 total_events += p.inserted;
                 total_errors += p.parse_errors;
@@ -379,11 +479,18 @@ async fn scalar_count(pool: &SqlitePool, sql: &str) -> i64 {
 /// T2.2 — fsevents-backed watcher. We forward all FS events to a
 /// tokio mpsc, debounce ~750ms, and rescan modified files. Watcher
 /// also wakes on `rescan` Notify (manual override / dev-mode reload).
-pub async fn run_watcher(
+///
+/// T3.2/T3.3 — `tracker` accumulates per-session liveness so the
+/// emotion engine can fire R1/R2 bubbles + native notifications.
+/// `app` is the Tauri handle used to `emit` `pet:task-completed` and
+/// `pet:pending-input`.
+pub async fn run_watcher<R: Runtime>(
+    app: AppHandle<R>,
     pool: SqlitePool,
     data_dir: PathBuf,
     status: Arc<Mutex<IngestStatus>>,
     rescan: Arc<Notify>,
+    tracker: Arc<SessionTracker>,
 ) -> Result<(), notify::Error> {
     let (tx, mut rx) = mpsc::unbounded_channel::<PathBuf>();
     let tx_for_notify = tx.clone();
@@ -435,11 +542,20 @@ pub async fn run_watcher(
                 let batch: Vec<_> = pending.drain().collect();
                 deadline = None;
                 let mut inserted = 0usize;
+                let mut completed: Vec<CompletionEvent> = Vec::new();
                 for path in &batch {
                     let off = last_offset(&pool, path).await;
-                    match ingest_file(&pool, path, off).await {
-                        Ok(p) => inserted += p.inserted,
+                    match ingest_file(&pool, path, off, Some(tracker.as_ref())).await {
+                        Ok(mut p) => {
+                            inserted += p.inserted;
+                            completed.append(&mut p.completed);
+                        }
                         Err(e) => eprintln!("[ingest] tail err: {e}"),
+                    }
+                }
+                for ev in &completed {
+                    if let Err(e) = app.emit(TASK_COMPLETED_EVENT, ev) {
+                        eprintln!("[ingest] failed to emit completion event: {e}");
                     }
                 }
                 if !batch.is_empty() {

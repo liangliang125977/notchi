@@ -68,8 +68,8 @@ body,
 .l2-capsule {
   flex: 0 1 auto;
   align-self: flex-start;
-  margin: 14px 14px 0 10px;
-  max-width: calc(100% - 240px - 20px);
+  margin: 14px 14px 0 -60px;
+  max-width: calc(100% - 180px - 14px);
   min-height: 64px;
   padding: 8px 14px;
   border-radius: 20px;

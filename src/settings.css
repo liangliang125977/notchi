@@ -747,6 +747,42 @@ body {
   gap: 6px;
 }
 
+.sp-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sp-source-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-source-name {
+  font-weight: 500;
+}
+
+.sp-source-stat {
+  color: var(--sp-card-muted, rgba(0, 0, 0, 0.55));
+}
+
+.sp-source-roots {
+  color: var(--sp-card-muted, rgba(0, 0, 0, 0.55));
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
 .sp-chip {
   appearance: none;
   border: 0.5px solid var(--sp-input-border);

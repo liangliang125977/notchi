@@ -3,17 +3,19 @@ import { useTokenSnapshot, snapshotDeltaPct } from "../hooks/useTokenSnapshot";
 import {
   formatCost,
   formatModel,
-  formatPercentDelta,
   formatRelativeMinutes,
   formatTokens,
-  shortProjectPath,
+  modelFamily,
+  shortSessionLabel,
 } from "../lib/format";
 
-// SPEC §5.3 — second-level glanceable card. Apple-flavoured: SF Pro,
-// vibrancy backdrop, tabular-nums, minimal chrome. Two stacked rows:
-//   Today 2.3M  ↑12%   $4.21   ●Sonnet 4.6
-//   Now: ai-coding · 185k tokens · 14m elapsed
-// Sits in the right 240×240 of the expanded 480×240 pet window.
+// SPEC §5.3 — second-level glanceable card, redesigned as a single-row
+// Dynamic Island row to match macOS Sonoma / Raycast / iStat Menus style.
+// Sits in the right half of the expanded 480×240 pet window, top-aligned.
+//
+//   [● Opus 4.7]  509K · $155.26 · ai-coding · 14m
+//
+// Empty fields collapse rather than render placeholders.
 
 interface Props {
   visible: boolean;
@@ -29,85 +31,97 @@ export function L2Capsule({ visible }: Props) {
       {visible ? (
         <motion.div
           className="l2-capsule"
-          initial={{ opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 16 }}
+          initial={{ opacity: 0, scale: 0.92, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: -2 }}
           transition={SPRING}
         >
-          <Row1 snap={snap} />
-          <Row2 snap={snap} />
+          <CapsuleRow snap={snap} />
         </motion.div>
       ) : null}
     </AnimatePresence>
   );
 }
 
-function Row1({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
+function CapsuleRow({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
   const tokens =
     snap.summary != null
       ? snap.summary.total_input + snap.summary.total_output
       : null;
+  const cost = snap.summary
+    ? Number.parseFloat(snap.summary.total_cost_usd)
+    : null;
   const delta = snapshotDeltaPct(snap);
-  return (
-    <div className="l2-row l2-row-1">
-      <span className="l2-label">Today</span>
-      <span className="l2-num l2-tokens">
-        {tokens === null ? "—" : formatTokens(tokens)}
-      </span>
-      <span
-        className={
-          "l2-delta " +
-          (delta == null
-            ? ""
-            : delta > 0
-              ? "is-up"
-              : delta < 0
-                ? "is-down"
-                : "is-flat")
-        }
-      >
-        {formatPercentDelta(delta)}
-      </span>
-      <span className="l2-cost">
-        {snap.summary ? formatCost(snap.summary.total_cost_usd) : "—"}
-      </span>
-      <span className="l2-model">
-        <span className="l2-model-dot" aria-hidden="true">
-          ●
-        </span>
-        {formatModel(snap.summary?.dominant_model ?? null)}
-      </span>
-    </div>
-  );
-}
+  const modelName = snap.summary?.dominant_model ?? null;
+  const family = modelFamily(modelName);
+  const recent = snap.recent;
+  const sessionLabel = shortSessionLabel(recent?.project_path);
+  const elapsed = recent ? formatRelativeMinutes(snap.recentRelativeIso) : null;
 
-function Row2({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
-  const r = snap.recent;
-  if (!r) {
+  // Collapse the whole capsule to a quiet idle state when there's no
+  // signal at all — better than five "—" placeholders.
+  const empty = tokens === null && cost === null && !recent;
+  if (empty) {
     return (
-      <div className="l2-row l2-row-2">
-        <span className="l2-row-2-text">No sessions yet today.</span>
+      <div className="l2-row">
+        <span className="l2-idle">No activity yet today</span>
       </div>
     );
   }
+
   return (
-    <div className="l2-row l2-row-2">
-      <span
-        className={
-          "l2-row-2-prefix " + (snap.recentActive ? "is-active" : "is-idle")
-        }
-      >
-        {snap.recentActive ? "Now" : "Last"}
-      </span>
-      <span className="l2-row-2-project">
-        {shortProjectPath(r.project_path)}
-      </span>
-      <span className="l2-row-2-sep">·</span>
-      <span className="l2-num">{formatTokens(r.total_tokens)}</span>
-      <span className="l2-row-2-tail">
-        {" "}
-        tokens · {formatRelativeMinutes(snap.recentRelativeIso)}
-      </span>
+    <div className="l2-row">
+      {modelName ? (
+        <span className={"l2-chip-model l2-fam-" + family}>
+          <span className="l2-chip-dot" aria-hidden="true" />
+          {formatModel(modelName)}
+        </span>
+      ) : null}
+
+      {tokens !== null ? (
+        <>
+          <span className="l2-num l2-tokens">{formatTokens(tokens)}</span>
+          {delta !== null ? (
+            <span
+              className={
+                "l2-delta " +
+                (delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat")
+              }
+            >
+              {delta > 0 ? "↑" : delta < 0 ? "↓" : "·"}
+              {Math.abs(delta).toFixed(0)}%
+            </span>
+          ) : null}
+        </>
+      ) : null}
+
+      {cost !== null && Number.isFinite(cost) ? (
+        <>
+          <span className="l2-dot-sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="l2-num l2-cost">{formatCost(cost)}</span>
+        </>
+      ) : null}
+
+      {sessionLabel ? (
+        <>
+          <span className="l2-dot-sep" aria-hidden="true">
+            ·
+          </span>
+          <span
+            className={
+              "l2-session " + (snap.recentActive ? "is-active" : "is-idle")
+            }
+          >
+            {snap.recentActive ? (
+              <span className="l2-pulse" aria-hidden="true" />
+            ) : null}
+            {sessionLabel}
+          </span>
+          {elapsed ? <span className="l2-elapsed">{elapsed}</span> : null}
+        </>
+      ) : null}
     </div>
   );
 }

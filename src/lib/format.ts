@@ -87,6 +87,43 @@ export function shortProjectPath(p: string | null | undefined): string {
   return parts.slice(-2).join("/");
 }
 
+// Compact, single-token session label for the L2 capsule. We avoid
+// surfacing internal layout like "worktrees/agent-a18be4...". Rules:
+//  - take the last path segment
+//  - if it's a hash-like worktree dir ("agent-<hex>" / 8+ hex tail),
+//    fall back to the parent segment when meaningful, else trim hash
+//  - never exceed ~14 chars, ellipsis the middle on overflow
+export function shortSessionLabel(p: string | null | undefined): string {
+  if (!p) return "";
+  const parts = p.split("/").filter(Boolean);
+  if (parts.length === 0) return "";
+  let leaf = parts[parts.length - 1];
+  const parent = parts.length >= 2 ? parts[parts.length - 2] : null;
+  const hashTail = /-[0-9a-f]{6,}$/i;
+  if (hashTail.test(leaf)) {
+    // e.g. "agent-a18be44e81cc6ec5" → strip hex → "agent"
+    const stripped = leaf.replace(hashTail, "");
+    leaf = stripped.length >= 2 ? stripped : (parent ?? leaf);
+  } else if (parent === "worktrees" || parent === ".worktrees") {
+    leaf = leaf.replace(hashTail, "");
+  }
+  if (leaf.length > 16) leaf = leaf.slice(0, 14) + "…";
+  return leaf;
+}
+
+// Map a (possibly raw) model id to a coarse family bucket so the L2
+// capsule can colour the leading dot the way macOS uses accent dots.
+export type ModelFamily = "opus" | "sonnet" | "haiku" | "other";
+
+export function modelFamily(model: string | null | undefined): ModelFamily {
+  if (!model) return "other";
+  const m = model.toLowerCase();
+  if (m.includes("opus")) return "opus";
+  if (m.includes("sonnet")) return "sonnet";
+  if (m.includes("haiku")) return "haiku";
+  return "other";
+}
+
 export function todayDateLabel(): string {
   const d = new Date();
   return d.toISOString().slice(0, 10);

@@ -89,6 +89,29 @@ struct UserEnvelope<'a> {
     timestamp: Option<&'a str>,
     #[serde(rename = "sessionId")]
     session_id: Option<&'a str>,
+    message: Option<UserMessage>,
+}
+
+/// `type=user` rows in Claude Code jsonl are emitted both for real user
+/// input and for tool_result echoes after assistant tool calls. We only
+/// want the former to count as a "user turn" for pending-input
+/// detection. Distinguishing them is content-shape based:
+/// - String content → real user input (CLI prompt text).
+/// - Array content with any element of `type: "tool_result"` → tool
+///   echo, NOT a user turn.
+#[derive(Debug, Deserialize)]
+struct UserMessage {
+    content: Option<serde_json::Value>,
+}
+
+fn user_envelope_is_real_turn(env: &UserEnvelope<'_>) -> bool {
+    match env.message.as_ref().and_then(|m| m.content.as_ref()) {
+        Some(serde_json::Value::String(_)) => true,
+        Some(serde_json::Value::Array(arr)) => !arr.iter().any(|item| {
+            item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
+        }),
+        _ => true,
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -182,7 +205,7 @@ async fn ingest_file(
         // counts at the same time.
         if let Some(tr) = tracker {
             if let Ok(live) = serde_json::from_slice::<UserEnvelope>(line) {
-                if live.ty == Some("user") {
+                if live.ty == Some("user") && user_envelope_is_real_turn(&live) {
                     let ts = live.timestamp.and_then(parse_iso);
                     let sid_for_live = live.session_id.unwrap_or(&session_id);
                     tr.observe_user(sid_for_live, ts);

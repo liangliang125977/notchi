@@ -4,6 +4,44 @@ This file records SPEC ambiguities, fallback decisions, and noteworthy
 deviations encountered while implementing Coding Pet. Per `CLAUDE.md`, AI
 agents must log here rather than guess.
 
+## 2026-05-05 — T2.6–T2.10 (UI layer)
+
+### L2 expanded window keeps fixed 240 height instead of 100
+
+**SPEC reference:** §4 S6 / §5.3 — "悬停 300ms → 480×100 横条".
+
+The pet's content (240×240) cannot shrink to 100 px without clipping
+Mao's head, which violates §6.7 D2 ("60-80% 头部可见"). Implemented
+`480×240` instead and put the capsule in the right 240×240 quadrant
+above the baseline. Functionally identical to the spec — wider but
+not taller — and avoids the visual regression. Recorded here so a
+future pass can re-evaluate after Live2D parameters are exposed for
+clean head-only crops.
+
+### Sessions / Tokens tabs disabled in MVP
+
+**SPEC reference:** §5.4 — implied multi-tab L3.
+
+Per task scope ("不做：周/月时间维度切换 / 全量历史会话浏览页"), the
+L3 sessions and dedicated tokens tabs are placeholder-only and shipped
+disabled with a "Coming in v1.x" tooltip. Overview absorbs the MVP
+needs.
+
+### Data folder picker uses text input
+
+The text-input + "Apply" button is a deliberate v1.0 simplification
+documented in the task scope; macOS native folder picker (Tauri
+`@tauri-apps/plugin-dialog`) deferred to T2.x. The Rust command
+already validates `path.exists()` so a typo just shows an inline
+error.
+
+### Quiet hours stored only (no bubble logic)
+
+Mute window editor in Settings persists `muteWindowStart` /
+`muteWindowEnd` to `settings.json` but no bubble code reads them
+yet — bubble work belongs to T3. Stored ahead of time so users can
+configure the value before the feature lands.
+
 ## 2026-05-05 — T2.1–T2.5 (data layer)
 
 ### jsonl schema (reverse-engineered, 2026-05-05)

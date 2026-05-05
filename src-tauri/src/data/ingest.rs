@@ -27,8 +27,8 @@ use walkdir::WalkDir;
 use super::pricing::{self, Pricing};
 use super::sessions::{CompletionEvent, SessionTracker};
 use super::sources::{
-    self, claude_code::ClaudeCodeAdapter, DataSourceAdapter, EventKind as ParsedKind,
-    ParseAdapter, ParsedEvent,
+    self, claude_code::ClaudeCodeAdapter, codex::CodexAdapter, DataSourceAdapter,
+    EventKind as ParsedKind, ParseAdapter, ParsedEvent,
 };
 use super::{db, IngestStatus, SourceStatus};
 
@@ -49,6 +49,14 @@ pub fn resolve_sources<R: Runtime>(app: &AppHandle<R>) -> Vec<sources::ResolvedA
         out.push(sources::ResolvedAdapter {
             adapter: Arc::new(claude),
             paths: claude_paths,
+        });
+    }
+    let codex = CodexAdapter::new();
+    let codex_paths = codex.discover_paths(app);
+    if !codex_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(codex),
+            paths: codex_paths,
         });
     }
     out

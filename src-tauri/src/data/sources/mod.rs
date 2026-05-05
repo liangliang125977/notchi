@@ -16,6 +16,7 @@
 //! land in stderr; everything else stays in the SQLite events table.
 
 pub mod claude_code;
+pub mod codex;
 
 use std::path::PathBuf;
 use std::sync::Arc;

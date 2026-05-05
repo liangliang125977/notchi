@@ -110,6 +110,30 @@ export function PetPanel() {
     }
   }
 
+  async function handleTestBubble(kind: "waiting" | "done") {
+    try {
+      // The pet window owns the petStore and the bubble component, so
+      // we can't call `showBubble` here directly. Forward over a Tauri
+      // event the pet window already listens to (or fakes one of the
+      // T3 events the emotion engine is already wired for).
+      const eventName =
+        kind === "done" ? "pet:task-completed" : "pet:pending-input";
+      const payload =
+        kind === "done"
+          ? {
+              session_id: "dev",
+              model: "claude-sonnet-4-6",
+              stop_reason: "end_turn",
+              duration_secs: 12,
+              total_tokens: 1234,
+            }
+          : { session_id: "dev", idle_secs: 35, bracket: 30 };
+      await emit(eventName, payload);
+    } catch (err) {
+      console.error("[pet-panel] failed to emit test bubble", err);
+    }
+  }
+
   const isDev = import.meta.env.DEV;
 
   return (
@@ -171,6 +195,39 @@ export function PetPanel() {
                   {PET_ACTION_LABELS[action]}
                 </button>
               ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {isDev ? (
+        <section className="sp-section">
+          <header className="sp-section-head">
+            <h3>
+              Test bubble <span className="sp-tag">dev only</span>
+            </h3>
+            <p className="sp-section-hint">
+              Fakes a Rust-side R1/R2 event so you can preview the bubble
+              animation + macOS notification permission flow without waiting for
+              a real Claude Code turn.
+            </p>
+          </header>
+          <div className="sp-section-body">
+            <div className="sp-row">
+              <button
+                type="button"
+                className="sp-btn"
+                onClick={() => void handleTestBubble("waiting")}
+              >
+                Trigger waiting bubble
+              </button>
+              <button
+                type="button"
+                className="sp-btn"
+                onClick={() => void handleTestBubble("done")}
+              >
+                Trigger done bubble + notification
+              </button>
             </div>
           </div>
         </section>

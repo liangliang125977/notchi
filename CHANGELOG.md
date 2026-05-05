@@ -4,6 +4,77 @@ This file records SPEC ambiguities, fallback decisions, and noteworthy
 deviations encountered while implementing Coding Pet. Per `CLAUDE.md`, AI
 agents must log here rather than guess.
 
+## 2026-05-05 — v1.0 (multi-source ingest)
+
+### Codex jsonl schema reverse-engineered
+
+Codex CLI rollouts live at `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-<ISO>-<ULID>.jsonl`.
+Each line is one JSON object whose top-level shape is `{ type, timestamp,
+payload }`. The `type` field is one of:
+
+| `type` | What it is | Carries token usage? |
+|---|---|---|
+| `session_meta` | First line of the file. `payload` has `id` (ULID — our `session_id`), `cwd`, `originator`, `cli_version`, `model_provider`. | No |
+| `turn_context` | Per-turn config snapshot. `payload.model` is the OpenAI model id (`gpt-5`, `o4-mini`, …). | No (we cache the model name) |
+| `event_msg` | Typed CLI events. `payload.type` ∈ `{ task_started, user_message, agent_message, token_count, task_complete, exec_command_end, … }`. | `token_count` only |
+| `response_item` | Streaming model fragments (text / function_call / reasoning). | No |
+
+The token usage rides on `event_msg` rows whose `payload.type ==
+"token_count"`. The payload shape is:
+
+```text
+{ "type": "token_count",
+  "info": {
+    "model_context_window": int,
+    "last_token_usage":  { input_tokens, cached_input_tokens,
+                           output_tokens, reasoning_output_tokens,
+                           total_tokens },
+    "total_token_usage": { …same shape… }   // CUMULATIVE — do NOT sum
+  },
+  "rate_limits": { … } }
+```
+
+`info` is occasionally `null` (one observed at file head when the CLI
+reconnects to an existing session); we skip those.
+
+Two normalisation gotchas for the OpenAI-side schema vs. our SQLite
+columns (`input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens`):
+
+1. `cached_input_tokens` is part of `input_tokens` (OpenAI reports
+   them inclusive, unlike Anthropic's split). We mirror it into
+   `cache_read_input_tokens` and subtract from `input_tokens` so the
+   pricing math matches OpenAI's published cached-input rate.
+2. `reasoning_output_tokens` is billed as output tokens by OpenAI
+   (o-series). We sum them into `output_tokens`.
+
+Per-turn delta vs. cumulative: the file emits a fresh `token_count`
+row after every assistant reply with both `last_token_usage`
+(this turn) and `total_token_usage` (running session total). We
+ingest only `last_token_usage`; summing `total` would double count.
+
+User-turn detection (R1 reset) uses `event_msg.payload.type ==
+"user_message"`. Turn completion (R2) uses `event_msg.payload.type
+== "task_complete"`, which carries `turn_id` + `duration_ms`. Codex
+does not emit a Claude-style `stop_reason` enum, so we synthesise
+`"end_turn"` for any `task_complete`.
+
+When Codex is configured to drive a non-OpenAI provider
+(`session_meta.model_provider != "openai"`), `turn_context.model`
+already carries the upstream id (e.g. `claude-sonnet-4-6`); pricing
+falls through to the existing Anthropic seed by exact-match.
+
+### Multi-source SessionTracker key
+
+The original `SessionTracker` was keyed by `session_id: String`. With
+multiple sources active, ULIDs / UUIDs from different tools cannot
+collide in practice but a future adapter that reuses simple ids (e.g.
+`default`) would. The tracker now uses
+`SessionKey { source, session_id }` — same structure on the wire,
+just namespaced internally. The session-tracker emit events
+(`pet:task-completed`, `pet:pending-input`) gain a `source` field so
+the UI can route them correctly.
+
 ## 2026-05-05 — T3.1–T3.4 (emotion + notifications)
 
 ### Bubble shows above Mao's head, not on the right

@@ -24,6 +24,12 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pet-canvas:active {
+  cursor: grabbing;
 }
 
 .pet-canvas canvas {

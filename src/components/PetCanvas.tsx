@@ -24,7 +24,7 @@ interface ActionMapping {
 // CHANGELOG and intentionally heuristic for MVP.
 const ACTION_MOTION: Record<Exclude<PetAction, "sleep">, ActionMapping> = {
   idle: { group: "Idle", index: 0 },
-  coding: { group: "", index: 1 },
+  coding: { group: "", index: 3 },
   waiting: { group: "", index: 4 },
   done: { group: "", index: 5 },
 };
@@ -114,22 +114,31 @@ export function PetCanvas() {
 
         app.stage.addChild(loaded);
 
-        // Sleep override: eyelid params have to be re-applied every
-        // frame after the motion system writes them, otherwise the
-        // active motion (or idle blink) re-opens the eyes.
-        const onAfterMotionUpdate = () => {
-          if (!model) return;
+        // Sleep override strategy (after several iterations):
+        // 1. Disable the auto-blink controller when entering sleep so
+        //    nothing automatically re-opens the eyes between motion ticks.
+        // 2. Wrap `loaded.update` (the entry point that PIXI's ticker
+        //    actually invokes) so our eye=0 write runs inline at the
+        //    end of each frame's model update — guaranteed last
+        //    writer before the renderer flushes the parameter buffer.
+        const live2dModel = loaded as unknown as {
+          update: (...args: unknown[]) => unknown;
+        };
+        const internalModelRef = loaded.internalModel as unknown as {
+          eyeBlink: unknown;
+        };
+        const origUpdate = live2dModel.update.bind(live2dModel);
+        const origEyeBlink = internalModelRef.eyeBlink;
+        live2dModel.update = function (...args: unknown[]) {
+          const ret = origUpdate(...args);
           if (usePetStore.getState().currentAction === "sleep") {
-            applySleepEyelids(model);
+            applySleepEyelids(loaded);
           }
+          return ret;
         };
-        const motionEmitter = loaded.internalModel.motionManager as unknown as {
-          on: (event: string, fn: () => void) => void;
-          off: (event: string, fn: () => void) => void;
-        };
-        motionEmitter.on("afterMotionUpdate", onAfterMotionUpdate);
         unsubscribeAfterMotion = () => {
-          motionEmitter.off("afterMotionUpdate", onAfterMotionUpdate);
+          live2dModel.update = origUpdate;
+          internalModelRef.eyeBlink = origEyeBlink;
         };
 
         await playMotion(loaded, usePetStore.getState().currentAction);
@@ -141,11 +150,14 @@ export function PetCanvas() {
           lastAction = next;
           if (!model) return;
           if (next === "sleep") {
-            // Halt any in-flight motion so the override is the only
-            // writer of ParamEye*Open.
+            // Halt motion + disable auto-blink so nothing reopens
+            // the eyes between frames; the per-frame update wrapper
+            // re-applies eye=0 after motion writes finish.
             loaded.internalModel.motionManager.stopAllMotions();
+            internalModelRef.eyeBlink = null;
             applySleepEyelids(model);
           } else {
+            internalModelRef.eyeBlink = origEyeBlink;
             void playMotion(model, next);
           }
         });

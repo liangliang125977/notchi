@@ -12,9 +12,22 @@
   "app": {
     "windows": [
       {
-        "title": "coding-pet",
-        "width": 800,
-        "height": 600
+        "label": "pet",
+        "title": "Notchi",
+        "url": "index.html",
+        "width": 240,
+        "height": 240,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "fullscreen": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": true,
+        "focus": false
       }
     ],
     "security": {

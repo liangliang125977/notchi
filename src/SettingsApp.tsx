@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Tabs, TabPanel, type TabItem } from "./components/Tabs";
 import { OverviewPanel } from "./components/OverviewPanel";
+import { SessionsPanel } from "./components/SessionsPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PetPanel } from "./components/PetPanel";
 
@@ -9,7 +10,7 @@ const OPEN_SETTINGS_TAB_EVENT = "settings:open-tab";
 
 const TABS: ReadonlyArray<TabItem> = [
   { id: "overview", label: "Overview" },
-  { id: "sessions", label: "Sessions", disabled: true, hint: "Coming in v1.x" },
+  { id: "sessions", label: "Sessions" },
   {
     id: "tokens",
     label: "Tokens",
@@ -82,6 +83,9 @@ function SettingsApp() {
               setHighlightBudget(true);
             }}
           />
+        </TabPanel>
+        <TabPanel id="sessions" active={active}>
+          <SessionsPanel />
         </TabPanel>
         <TabPanel id="pet" active={active}>
           <PetPanel />

@@ -162,21 +162,43 @@ pub struct SessionRow {
     pub project_path: Option<String>,
 }
 
-pub async fn recent_sessions(pool: &SqlitePool, limit: i64) -> Result<Vec<SessionRow>, sqlx::Error> {
-    let sql = "SELECT session_id,
-                       MIN(timestamp) AS started_at,
-                       COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
-                       COALESCE(SUM(CAST(cost_usd AS REAL)),0) AS cost,
-                       (SELECT model FROM events e2 WHERE e2.session_id = e1.session_id
-                        GROUP BY model ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS model,
-                       (SELECT project_path FROM events e3 WHERE e3.session_id = e1.session_id
-                        AND project_path IS NOT NULL LIMIT 1) AS project_path
-                FROM events e1
-                GROUP BY session_id
-                ORDER BY started_at DESC
-                LIMIT ?1";
+/// Returns sessions whose first event falls inside `period`. A
+/// `period == None` means "no period filter" — used by the Sessions
+/// panel's "All" chip — and we still apply a 30-day floor so the
+/// query never paginates the full event log.
+pub async fn recent_sessions_in(
+    pool: &SqlitePool,
+    period: Option<Period>,
+    limit: i64,
+) -> Result<Vec<SessionRow>, sqlx::Error> {
+    let lb = period
+        .map(|p| p.lower_bound_sql())
+        .unwrap_or("datetime('now', '-30 days')");
+    let sql = format!(
+        "SELECT session_id,
+                started_at,
+                tokens,
+                cost,
+                model,
+                project_path
+         FROM (
+            SELECT session_id,
+                   MIN(timestamp) AS started_at,
+                   COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
+                   COALESCE(SUM(CAST(cost_usd AS REAL)),0) AS cost,
+                   (SELECT model FROM events e2 WHERE e2.session_id = e1.session_id
+                    GROUP BY model ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS model,
+                   (SELECT project_path FROM events e3 WHERE e3.session_id = e1.session_id
+                    AND project_path IS NOT NULL LIMIT 1) AS project_path
+            FROM events e1
+            GROUP BY session_id
+         )
+         WHERE started_at >= {lb}
+         ORDER BY started_at DESC
+         LIMIT ?1"
+    );
     let rows: Vec<(String, String, i64, f64, String, Option<String>)> =
-        sqlx::query_as(sql).bind(limit).fetch_all(pool).await?;
+        sqlx::query_as(&sql).bind(limit).fetch_all(pool).await?;
     Ok(rows
         .into_iter()
         .map(|(s, st, t, c, m, p)| SessionRow {

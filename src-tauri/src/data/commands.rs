@@ -63,8 +63,16 @@ pub async fn token_by_model(
 pub async fn recent_sessions(
     state: State<'_, DataState>,
     limit: Option<i64>,
+    period: Option<String>,
 ) -> Result<Vec<SessionRow>, String> {
-    queries::recent_sessions(pool_of(&state), limit.unwrap_or(20))
+    // `period == None` or `"all"` means "no period filter" (capped at
+    // 30 days inside the query so we never page through the full
+    // event log). Any other string maps via Period::from_str.
+    let p = match period.as_deref() {
+        None | Some("all") => None,
+        Some(other) => Some(Period::from_str(other)),
+    };
+    queries::recent_sessions_in(pool_of(&state), p, limit.unwrap_or(20))
         .await
         .map_err(|e| e.to_string())
 }

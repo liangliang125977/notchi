@@ -4,6 +4,83 @@ This file records SPEC ambiguities, fallback decisions, and noteworthy
 deviations encountered while implementing Coding Pet. Per `CLAUDE.md`, AI
 agents must log here rather than guess.
 
+## 2026-05-05 — T2.1–T2.5 (data layer)
+
+### jsonl schema (reverse-engineered, 2026-05-05)
+
+`~/.claude/projects/<dash-encoded-cwd>/<sessionId>.jsonl` contains
+newline-delimited JSON objects with a `type` discriminator. Observed
+values include `assistant`, `user`, `system`, `attachment`,
+`queue-operation`, `last-prompt`. Only `type=assistant` rows carry token
+usage.
+
+Relevant fields on assistant rows:
+
+```text
+{
+  "type": "assistant",
+  "timestamp": "<ISO-8601>",
+  "sessionId": "<uuid>",
+  "cwd": "<absolute project path>",
+  "requestId": "<opaque>",
+  "message": {
+    "id": "msg_…",
+    "model": "claude-opus-4-7" | "claude-haiku-4-5-20251001" | "glm-4.7" | …,
+    "usage": {
+      "input_tokens": int,
+      "output_tokens": int,
+      "cache_read_input_tokens": int,
+      "cache_creation_input_tokens": int,
+      "service_tier": str, "inference_geo": str, "iterations": int,
+      "speed": float, "server_tool_use": object
+    }
+  }
+}
+```
+
+Subagents write to `<sessionId>/subagents/agent-*.jsonl`; the same
+assistant message can therefore appear in multiple files. We dedupe on
+the partial unique index `(message_id, request_id)` (only enforced when
+both are non-null).
+
+Per CLAUDE.md privacy rules, this CHANGELOG describes the schema by
+shape only — no real prompts/timestamps/paths are captured here.
+
+### Direct sqlx in addition to `tauri-plugin-sql`
+
+SPEC §6.6 lists `tauri-plugin-sql`; T1.1 already settled that direct
+`rusqlite` is incompatible with it. T2.1 added a direct
+`sqlx = "0.8"` dependency (matching the version pulled in by the
+plugin) so that Rust-side ingest can run on the same `SqlitePool`.
+Frontend still has the option of calling `tauri-plugin-sql`'s JS API
+later, but writes are now Rust-owned to keep raw jsonl bytes off the
+JS bridge entirely (privacy + perf).
+
+### Model name dated suffix fallback
+
+Anthropic emits both `claude-haiku-4-5` and dated variants such as
+`claude-haiku-4-5-20251001` over the wire. Pricing lookup tries the
+exact key first and, on miss, strips a trailing `-YYYYMMDD` and retries.
+Unknown models still fall through to a zero-priced shape (S11 says: no
+`$` until configured).
+
+### Third-party endpoint detection deferred
+
+SPEC §4 S11 asks for per-endpoint pricing. T2.4 ships the data shape
+(`endpoint_id`, `is_third_party`) but every `claude-code` jsonl row
+ingests as `is_third_party=0`, `endpoint_id=NULL`. Real detection of
+DeepSeek / GLM / etc. proxied through Claude Code is left for a later
+pass — schema is forward-compatible.
+
+### Parse error log path
+
+S14 specifies `~/Library/Logs/<App>/parse-errors.log`. We use
+`~/Library/Logs/Notchi/parse-errors.log` (matching the `productName`
+in `tauri.conf.json` only roughly — bundle id is `com.codingpet.app`).
+Log entries are summary-level only (`<ts>\t<N> parse error(s)`); we do
+not write the offending JSON line to disk to avoid persisting partial
+prompt content.
+
 ## 2026-05-05 — T1.1 (project scaffolding)
 
 ### `rusqlite` + `tauri-plugin-sql` cannot coexist with `sqlite` feature

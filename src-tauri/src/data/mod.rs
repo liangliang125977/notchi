@@ -18,6 +18,7 @@ pub mod ingest;
 pub mod pricing;
 pub mod queries;
 pub mod sessions;
+pub mod sources;
 
 use std::sync::Arc;
 
@@ -45,4 +46,19 @@ pub struct IngestStatus {
     pub errors_today: i64,
     pub claude_code_data_dir: Option<String>,
     pub claude_code_found: bool,
+    /// v1.0 — per-source breakdown for the L3 settings "Data sources"
+    /// section + dev "数据摘要" panel.
+    #[serde(default)]
+    pub sources: Vec<SourceStatus>,
+}
+
+#[derive(Default, Debug, Clone, serde::Serialize)]
+pub struct SourceStatus {
+    pub name: String,
+    /// Filesystem roots being watched. Logged through Tauri to the UI
+    /// so the user can see at a glance which tools were detected.
+    pub roots: Vec<String>,
+    pub files_watched: i64,
+    pub events_count: i64,
+    pub last_ingest_at: Option<String>,
 }

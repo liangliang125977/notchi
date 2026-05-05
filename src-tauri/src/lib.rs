@@ -94,6 +94,7 @@ pub fn run() {
             data::commands::get_pricing_config,
             data::commands::set_pricing_entry,
             data::commands::ingest_status,
+            data::commands::detected_sources,
             data::commands::get_settings,
             data::commands::set_settings,
             data::commands::set_claude_code_data_dir,

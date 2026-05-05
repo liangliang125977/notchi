@@ -64,3 +64,42 @@ warnings are tolerated. The actual rendering work is T1.4, where we will
 pick the correct fork/branch (`0.5.0-beta` or the community `cubism4`
 fork that supports pixi v7). No CHANGELOG action required at runtime
 yet.
+
+## 2026-05-05 — T1.2 (window + tray)
+
+### Dev-mode `set_activation_policy(.Accessory)` does not reliably hide Dock / Cmd-Tab
+
+**SPEC reference:** §6.7 D1 — "Dock 完全隐藏（LSUIElement=true）+ 状态栏图标作为唯一显式入口".
+
+**Observed on user machine (macOS 26.5 Tahoe, Tauri 2.11):**
+- Setup-hook diagnostics confirm `app.set_activation_policy(Accessory)` is
+  invoked successfully (no panic, no error log).
+- However, the dev binary `target/debug/coding-pet` still shows in Dock
+  and still appears in Cmd-Tab, contradicting D1.
+- Tray icon and `NSWindow.collectionBehavior` (cross-Space) work
+  correctly — only the activation-policy effect is missing.
+
+**Root cause:** Tauri/macOS known limitation. `LSUIElement=true` in
+`Info.plist` only takes effect for bundled `.app` binaries. The dev
+binary is unbundled and ignores the plist; runtime
+`setActivationPolicy(NSApplicationActivationPolicyAccessory)` after NSApp
+has already launched is unreliable on macOS 14+ for this purpose
+(documented Apple guidance: use `LSUIElement` in plist, not runtime).
+
+**Decision:** Accept dev-mode Dock visibility as a known limitation. The
+behaviour is correct for the production bundle, which is what users will
+ship and run. No code change. To verify the fix in dev, run
+`PATH=/usr/bin:$HOME/.cargo/bin:$PATH pnpm tauri build` and launch the
+resulting `.app` — Dock will be empty and Cmd-Tab will exclude the app.
+
+**Implication for T1.2 acceptance:** Three of the five UX checks pass in
+dev (tray visible, cross-Space follow via three-finger swipe, settings
+window opens via tray click). Two checks (Dock hidden, Cmd-Tab hidden)
+defer to T4.x bundle verification. This is recorded as a deferred
+acceptance and is not a code defect.
+
+**Note on Ctrl-arrow Space switching:** The keyboard shortcut for
+"切换到上一个空间 / 下一个空间" is OFF by default on macOS (System
+Settings → Keyboard → Shortcuts → Mission Control). Users who want
+cross-Space follow via keyboard must enable it themselves; the code
+behaviour is correct (verified via three-finger swipe).

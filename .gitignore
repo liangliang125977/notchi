@@ -1,0 +1,79 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.zed/
+*.iml
+
+# Build artifacts (placeholder — refine after tech stack chosen)
+build/
+dist/
+target/
+node_modules/
+.next/
+.nuxt/
+out/
+*.app
+*.dmg
+
+# Xcode (if Swift)
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+Pods/
+Carthage/Build/
+
+# Rust (if Tauri/native Rust)
+Cargo.lock
+**/*.rs.bk
+
+# Node / TS (if Tauri/Electron front-end)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm/
+.pnpm-store/
+.yarn/
+
+# Logs & Local data
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# Env / Secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Live2D model assets that may have license restrictions — review before committing
+# (uncomment after deciding distribution strategy)
+# assets/live2d/
+
+# Project-local cache
+.cache/
+.tmp/
+tmp/
+
+# Coverage / Test artifacts
+coverage/
+*.lcov
+.nyc_output/
+
+# Apple notarization / signing
+*.p12
+*.mobileprovision
+notarization/

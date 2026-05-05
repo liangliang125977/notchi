@@ -1,11 +1,10 @@
 import "./App.css";
+import { PetCanvas } from "./components/PetCanvas";
 
 function App() {
   return (
     <div className="pet-window">
-      <div className="pet-placeholder">
-        <span className="pet-label">Notchi</span>
-      </div>
+      <PetCanvas />
     </div>
   );
 }

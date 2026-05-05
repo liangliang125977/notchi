@@ -18,29 +18,15 @@ body,
   user-select: none;
 }
 
-.pet-placeholder {
-  width: 220px;
-  height: 220px;
-  border-radius: 32px;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  background: rgba(30, 30, 32, 0.55);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+.pet-canvas {
+  width: 240px;
+  height: 240px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.pet-label {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
-    sans-serif;
-  font-size: 22px;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+.pet-canvas canvas {
+  display: block;
+  background: transparent;
 }

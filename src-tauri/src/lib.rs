@@ -4,7 +4,8 @@
 mod macos;
 mod tray;
 
-use tauri::Manager;
+use serde::Serialize;
+use tauri::{LogicalPosition, Manager};
 #[cfg(target_os = "macos")]
 use tauri_plugin_store::StoreExt;
 
@@ -13,10 +14,64 @@ use tauri_plugin_store::StoreExt;
 const SETTINGS_STORE_PATH: &str = "settings.json";
 /// Settings key for the SPEC §4 S16 manual notch override.
 const NOTCH_MODE_KEY: &str = "notchMode";
+/// Settings key for SPEC §4 S8/S19 — last user-chosen pet window
+/// position (`null` means "use the default notch position").
+const WINDOW_POSITION_KEY: &str = "windowPosition";
 
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+/// SPEC §6.7 D4 — frontend asks Rust for the current default pet
+/// position so it can compute the snap distance with the same numbers
+/// the setup hook used. Returns top-left logical pixels and the pet
+/// window's logical size.
+#[derive(Serialize)]
+struct PetTargetPosition {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+#[tauri::command]
+fn pet_default_target_position(app: tauri::AppHandle) -> Result<PetTargetPosition, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(window) = app.get_webview_window("pet") else {
+            return Err("pet window not found".into());
+        };
+        let mode = read_notch_mode(&app);
+        let (x, y) = macos::pet_target_position(&window, mode).map_err(|e| e.to_string())?;
+        Ok(PetTargetPosition {
+            x,
+            y,
+            width: macos::PET_WINDOW_WIDTH,
+            height: macos::PET_WINDOW_HEIGHT,
+        })
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Err("pet positioning is macOS-only".into())
+    }
+}
+
+/// SPEC §4 S19 — frontend reports the current main screen identifier
+/// so it can be persisted alongside the remembered window position.
+/// On non-macOS this returns `None`.
+#[tauri::command]
+fn pet_main_screen_id() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::read_main_screen_id()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,7 +79,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            pet_default_target_position,
+            pet_main_screen_id
+        ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -38,9 +97,7 @@ pub fn run() {
                     macos::apply_pet_window_behaviour(&pet)?;
 
                     let mode = read_notch_mode(app.handle());
-                    if let Err(err) = macos::position_pet_window(&pet, mode) {
-                        eprintln!("[T1.3] failed to position pet window: {err}");
-                    }
+                    place_pet_window_at_startup(app.handle(), &pet, mode);
                 }
             }
 
@@ -65,6 +122,59 @@ fn read_notch_mode<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> macos::Notch
         Err(err) => {
             eprintln!("[T1.3] settings store unavailable, defaulting notchMode=auto: {err}");
             macos::NotchMode::Auto
+        }
+    }
+}
+
+/// SPEC §4 S8 + S19 startup placement:
+///   1. read remembered `windowPosition` from the store
+///   2. require `screenId` to match the current main screen
+///   3. require the whole 240×240 window to fit inside `visibleFrame`
+///      with a 10 px safety margin
+///   4. otherwise (no record, mismatched screen, or off-screen) fall
+///      back to `pet_target_position` and clear the memorised entry
+#[cfg(target_os = "macos")]
+fn place_pet_window_at_startup<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    pet: &tauri::WebviewWindow<R>,
+    mode: macos::NotchMode,
+) {
+    let mut use_default = true;
+
+    if let Ok(store) = app.store(SETTINGS_STORE_PATH) {
+        if let Some(value) = store.get(WINDOW_POSITION_KEY) {
+            if !value.is_null() {
+                let stored_x = value.get("x").and_then(|v| v.as_f64());
+                let stored_y = value.get("y").and_then(|v| v.as_f64());
+                let stored_screen = value.get("screenId").and_then(|v| v.as_str()).map(str::to_owned);
+                let current_screen = macos::read_main_screen_id();
+
+                let screen_matches = match (&stored_screen, &current_screen) {
+                    (Some(a), Some(b)) => a == b,
+                    _ => false,
+                };
+
+                if let (Some(x), Some(y), true) = (stored_x, stored_y, screen_matches) {
+                    if macos::is_pet_window_onscreen(x, y) {
+                        if let Err(err) = pet.set_position(LogicalPosition::new(x, y)) {
+                            eprintln!("[T1.6] failed to restore pet window: {err}");
+                        } else {
+                            use_default = false;
+                        }
+                    }
+                }
+
+                if use_default {
+                    // Stale (off-screen / wrong display) — drop the entry.
+                    store.set(WINDOW_POSITION_KEY, serde_json::Value::Null);
+                }
+            }
+        }
+    }
+
+    if use_default {
+        if let Err(err) = macos::position_pet_window(pet, mode) {
+            eprintln!("[T1.3] failed to position pet window: {err}");
         }
     }
 }

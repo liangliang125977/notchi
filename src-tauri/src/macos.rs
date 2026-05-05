@@ -10,7 +10,7 @@
 use objc2::rc::Retained;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSScreen, NSWindow, NSWindowCollectionBehavior};
-use tauri::{LogicalPosition, WebviewWindow};
+use tauri::{LogicalPosition, Runtime, WebviewWindow};
 
 /// `NSStatusWindowLevel` (Apple-defined constant). Keeps the pet floating
 /// above ordinary application windows but below the menu bar.
@@ -19,7 +19,17 @@ const NS_STATUS_WINDOW_LEVEL: isize = 25;
 /// Pet window width (logical pixels) — kept in sync with
 /// `tauri.conf.json`'s `pet` window. SPEC §6.7 D2 pegs the head at
 /// the top ~50% of the 240 px-tall window (i.e. ~120 px of head).
-const PET_WINDOW_WIDTH: f64 = 240.0;
+pub const PET_WINDOW_WIDTH: f64 = 240.0;
+
+/// Pet window height (logical pixels) — kept in sync with
+/// `tauri.conf.json`'s `pet` window.
+pub const PET_WINDOW_HEIGHT: f64 = 240.0;
+
+/// SPEC §4 S19: minimum on-screen margin (logical px) when checking a
+/// remembered window position against the current main screen's
+/// visibleFrame. The whole 240×240 window must fit inside
+/// `visibleFrame` after accounting for this margin.
+pub const ONSCREEN_SAFETY_MARGIN_PX: f64 = 10.0;
 
 /// How far the window's top edge tucks under the notch on notched
 /// hardware. ~25% of the 120 px head → 75% remains visible, which
@@ -51,7 +61,7 @@ impl NotchMode {
 
 /// Make `window` join every Space, stay put when the user switches Space,
 /// and float above standard application windows.
-pub fn apply_pet_window_behaviour(window: &WebviewWindow) -> tauri::Result<()> {
+pub fn apply_pet_window_behaviour<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
     let ns_window_ptr = window.ns_window()? as *mut NSWindow;
     if ns_window_ptr.is_null() {
         return Ok(());
@@ -90,6 +100,20 @@ struct ScreenGeometry {
     /// the menu-bar height in logical points. ~24 on non-notch, ~38
     /// on notched displays.
     menu_bar_height: f64,
+    /// `localizedName` of the screen, used as a stable-ish identifier
+    /// for SPEC §4 S19's "did the user change main display?" check.
+    localized_name: String,
+}
+
+/// Visible-frame rectangle in Tauri logical pixels with top-left
+/// origin (the same coordinate system `WebviewWindow::set_position`
+/// uses). All four values are inclusive bounds in logical pixels.
+#[derive(Debug, Clone, Copy)]
+pub struct VisibleFrame {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 fn read_main_screen_geometry() -> Option<ScreenGeometry> {
@@ -105,11 +129,58 @@ fn read_main_screen_geometry() -> Option<ScreenGeometry> {
     let visible_max_y = visible.origin.y + visible.size.height;
     let menu_bar_height = (frame_max_y - visible_max_y).max(0.0);
 
+    let localized_name = screen.localizedName().to_string();
+
     Some(ScreenGeometry {
         frame_width: frame.size.width,
         safe_area_top: insets.top.max(0.0),
         menu_bar_height,
+        localized_name,
     })
+}
+
+/// Read the main screen's `visibleFrame` (the rect excluding menu bar
+/// and Dock) in Tauri logical pixels with top-left origin.
+pub fn read_main_screen_visible_frame() -> Option<VisibleFrame> {
+    let mtm = MainThreadMarker::new()?;
+    let screen = NSScreen::mainScreen(mtm)?;
+
+    let frame = screen.frame();
+    let visible = screen.visibleFrame();
+
+    // Cocoa visibleFrame is bottom-left origin within `frame`. Convert
+    // its top-left corner to top-left-origin Tauri pixels.
+    let frame_max_y = frame.origin.y + frame.size.height;
+    let visible_max_y = visible.origin.y + visible.size.height;
+    let y_top = frame_max_y - visible_max_y;
+
+    Some(VisibleFrame {
+        x: visible.origin.x,
+        y: y_top.max(0.0),
+        width: visible.size.width,
+        height: visible.size.height,
+    })
+}
+
+/// Read the main screen's stable-ish identifier (its `localizedName`),
+/// used by SPEC §4 S19 to decide whether a remembered window position
+/// still belongs to the current display setup.
+pub fn read_main_screen_id() -> Option<String> {
+    read_main_screen_geometry().map(|g| g.localized_name)
+}
+
+/// Returns true if the 240×240 pet window placed at top-left `(x, y)`
+/// fits entirely inside the current main screen's visibleFrame after
+/// applying the SPEC §4 S19 safety margin.
+pub fn is_pet_window_onscreen(x: f64, y: f64) -> bool {
+    let Some(vf) = read_main_screen_visible_frame() else {
+        return false;
+    };
+    let m = ONSCREEN_SAFETY_MARGIN_PX;
+    x >= vf.x + m
+        && y >= vf.y + m
+        && x + PET_WINDOW_WIDTH <= vf.x + vf.width - m
+        && y + PET_WINDOW_HEIGHT <= vf.y + vf.height - m
 }
 
 /// Convert a "screen-top-left + Y down" coordinate into Tauri's
@@ -131,8 +202,8 @@ fn screen_topleft_to_tauri(x_left: f64, y_top_relative_to_screen: f64) -> (f64, 
 /// - `Auto`: trust `safeAreaInsets.top`; if 0 / unavailable, treat as
 ///   "no notch".
 /// - `ForceNotch` / `ForceNoNotch`: override regardless of detection.
-pub fn pet_target_position(
-    _window: &WebviewWindow,
+pub fn pet_target_position<R: Runtime>(
+    _window: &WebviewWindow<R>,
     mode: NotchMode,
 ) -> tauri::Result<(f64, f64)> {
     // S16 default: if we cannot read the screen at all, assume no-notch
@@ -169,7 +240,10 @@ pub fn pet_target_position(
 }
 
 /// Apply `pet_target_position` to the window. Convenience wrapper.
-pub fn position_pet_window(window: &WebviewWindow, mode: NotchMode) -> tauri::Result<()> {
+pub fn position_pet_window<R: Runtime>(
+    window: &WebviewWindow<R>,
+    mode: NotchMode,
+) -> tauri::Result<()> {
     let (x, y) = pet_target_position(window, mode)?;
     window.set_position(LogicalPosition::new(x, y))?;
     Ok(())

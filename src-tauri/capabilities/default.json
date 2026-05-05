@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Capability for the pet and settings windows",
   "windows": ["pet", "settings"],
-  "permissions": ["core:default", "opener:default", "store:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-position",
+    "opener:default",
+    "store:default"
+  ]
 }

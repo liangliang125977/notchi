@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { formatModel } from "../lib/format";
 import type { PricingEntry, SettingsBundle } from "../lib/dataTypes";
 
@@ -107,6 +108,12 @@ export function SettingsPanel({ highlightBudget }: Props) {
           mute_window_start: muteFrom,
           mute_window_end: muteTo,
         },
+      });
+      // Tell the pet window to refresh its in-memory mute schedule
+      // (T3.4 — bubbles read from petStore which mirrors these values).
+      void emit("settings:mute-changed", {
+        mute_window_start: muteFrom,
+        mute_window_end: muteTo,
       });
       flash("Quiet hours saved.");
     } catch (err) {
@@ -287,7 +294,7 @@ export function SettingsPanel({ highlightBudget }: Props) {
 
       <Section
         title="Quiet hours"
-        hint="Reserved for future bubble notifications — stored only for now."
+        hint="Bubbles are suppressed during this window. macOS notifications are unaffected — adjust those independently in System Settings → Notifications."
       >
         <div className="sp-row">
           <label className="sp-time-label">

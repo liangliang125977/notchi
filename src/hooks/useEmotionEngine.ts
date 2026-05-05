@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
   isPermissionGranted,
   requestPermission,
@@ -11,6 +11,9 @@ import type { SettingsBundle } from "../lib/dataTypes";
 
 const TASK_COMPLETED_EVENT = "pet:task-completed";
 const PENDING_INPUT_EVENT = "pet:pending-input";
+// v1.3 hardening — pet broadcasts when macOS denied the notification
+// permission so the settings window can show a deep-link banner.
+const NOTIFICATIONS_DENIED_EVENT = "pet:notifications-denied";
 
 interface CompletionPayload {
   session_id: string;
@@ -58,9 +61,16 @@ async function ensureNotifyPermission(): Promise<boolean> {
         const next = await requestPermission();
         granted = next === "granted";
       }
+      if (!granted) {
+        // v1.3 hardening — surface in the settings window so the user
+        // can deep-link into System Settings → Notifications. One-shot
+        // per session because this promise is memoised.
+        void emit(NOTIFICATIONS_DENIED_EVENT);
+      }
       return granted;
     } catch (err) {
       console.error("[emotion] notify permission check failed", err);
+      void emit(NOTIFICATIONS_DENIED_EVENT);
       return false;
     }
   })();

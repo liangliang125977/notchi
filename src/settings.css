@@ -868,3 +868,70 @@ body {
     color: rgba(20, 20, 20, 0.95);
   }
 }
+
+/* v1.3 — banner shown when macOS notifications are blocked. */
+.settings-banner-warn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 159, 10, 0.35);
+  background: rgba(255, 159, 10, 0.12);
+  color: rgba(60, 30, 0, 0.9);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.settings-banner-warn-text {
+  flex: 1 1 auto;
+}
+.settings-banner-warn-btn {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 159, 10, 0.55);
+  background: rgba(255, 159, 10, 0.18);
+  color: rgba(60, 30, 0, 0.95);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.settings-banner-warn-btn:hover {
+  background: rgba(255, 159, 10, 0.28);
+}
+.settings-banner-warn-dismiss {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: rgba(60, 30, 0, 0.55);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.settings-banner-warn-dismiss:hover {
+  color: rgba(60, 30, 0, 0.95);
+}
+@media (prefers-color-scheme: dark) {
+  .settings-banner-warn {
+    border-color: rgba(255, 159, 10, 0.4);
+    background: rgba(255, 159, 10, 0.18);
+    color: rgba(255, 220, 170, 0.95);
+  }
+  .settings-banner-warn-btn {
+    border-color: rgba(255, 196, 87, 0.5);
+    background: rgba(255, 196, 87, 0.2);
+    color: rgba(255, 220, 170, 0.95);
+  }
+  .settings-banner-warn-btn:hover {
+    background: rgba(255, 196, 87, 0.28);
+  }
+  .settings-banner-warn-dismiss {
+    color: rgba(255, 220, 170, 0.55);
+  }
+  .settings-banner-warn-dismiss:hover {
+    color: rgba(255, 220, 170, 0.95);
+  }
+}

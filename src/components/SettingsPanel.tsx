@@ -92,10 +92,15 @@ export function SettingsPanel({ highlightBudget }: Props) {
       await invoke("set_settings", {
         patch: { monthly_budget_usd: value },
       });
+      // v1.3 hardening — let the pet window know so the L1 colour
+      // tone updates immediately instead of waiting for the next
+      // 60s poll. Otherwise a fresh budget edit feels broken.
+      void emit("settings:budget-changed", { monthly_budget_usd: value });
       await reload();
       flash("Budget saved.");
     } catch (err) {
       console.error("[settings] save budget", err);
+      flash(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSavingBudget(false);
     }

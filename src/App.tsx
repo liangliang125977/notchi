@@ -11,7 +11,24 @@ import { useFallbackEvents } from "./hooks/useFallbackEvents";
 import { useColorTone } from "./hooks/useColorTone";
 import { usePetHoverExpand } from "./hooks/usePetHoverExpand";
 import { useEmotionEngine } from "./hooks/useEmotionEngine";
+import { usePetStatus } from "./hooks/usePetStatus";
 import { usePetStore } from "./stores/petStore";
+
+// v1.1 — three stage outline filters. Egg gets a soft warm aura,
+// Hatchling a brighter golden glow, Adult a stronger blue-shifted halo.
+// Combined with the SPEC §5.2 budget tone filter via space-join.
+function stageFilter(stage: number | undefined): string | null {
+  switch (stage) {
+    case 0:
+      return "drop-shadow(0 0 2px rgba(255, 230, 180, 0.55))";
+    case 1:
+      return "drop-shadow(0 0 4px rgba(255, 215, 100, 0.85))";
+    case 2:
+      return "drop-shadow(0 0 5px rgba(120, 180, 255, 0.85)) drop-shadow(0 0 12px rgba(120, 180, 255, 0.4))";
+    default:
+      return null;
+  }
+}
 
 function App() {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -27,6 +44,9 @@ function App() {
 
   const { filter } = useColorTone();
   const { expanded } = usePetHoverExpand({ rootRef: wrapperRef });
+  const { status: petStatus } = usePetStatus();
+  const stageOutline = stageFilter(petStatus?.evolution.stage);
+  const composedFilter = [filter, stageOutline].filter(Boolean).join(" ");
 
   return (
     <div
@@ -38,7 +58,7 @@ function App() {
         ref={petSlotRef}
         className="pet-canvas"
         style={{
-          filter: filter ?? "none",
+          filter: composedFilter || "none",
           transition: "filter 1.5s ease",
         }}
       >

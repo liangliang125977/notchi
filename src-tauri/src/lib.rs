@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+mod data;
 #[cfg(target_os = "macos")]
 mod macos;
 mod tray;
@@ -79,12 +80,35 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_sql::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             greet,
             pet_default_target_position,
-            pet_main_screen_id
+            pet_main_screen_id,
+            data::commands::token_summary,
+            data::commands::token_timeseries,
+            data::commands::token_by_source,
+            data::commands::token_by_model,
+            data::commands::recent_sessions,
+            data::commands::get_pricing_config,
+            data::commands::set_pricing_entry,
+            data::commands::ingest_status,
+            data::commands::get_settings,
+            data::commands::set_claude_code_data_dir,
+            data::commands::rescan_now,
         ])
         .setup(|app| {
+            // T2 — install the data layer (pool + backfill + watcher).
+            // tauri provides a tokio runtime via `tauri::async_runtime`;
+            // we use it to await the synchronous part of setup (pool
+            // creation + price seeding) and spawn the long-running
+            // watcher / backfill tasks inside.
+            let app_handle = app.handle().clone();
+            let state = tauri::async_runtime::block_on(async move {
+                data::commands::install(&app_handle).await
+            })
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+            app.manage(state);
             #[cfg(target_os = "macos")]
             {
                 // SPEC §6.7 D1: hide from Dock and Cmd-Tab. Mirrors the

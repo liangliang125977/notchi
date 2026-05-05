@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { emit, listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import {
   PET_ACTIONS,
   PET_FORCE_FALLBACK_EVENT,
@@ -11,6 +12,25 @@ import {
   type PetRenderModePayload,
   type PetSetActionPayload,
 } from "./stores/petStore";
+
+type IngestStatus = {
+  events_count: number;
+  jsonl_files_watched: number;
+  last_ingest_at: string | null;
+  errors_today: number;
+  claude_code_data_dir: string | null;
+  claude_code_found: boolean;
+};
+
+type TokenSummary = {
+  total_input: number;
+  total_output: number;
+  total_cache_read: number;
+  total_cache_creation: number;
+  total_cost_usd: string;
+  session_count: number;
+  dominant_model: string | null;
+};
 
 type NotchMode = "auto" | "force-notch" | "force-no-notch";
 
@@ -110,6 +130,50 @@ function SettingsApp() {
     }
   }
 
+  const isDev = import.meta.env.DEV;
+  const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
+  const [todaySummary, setTodaySummary] = useState<TokenSummary | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  const refreshDataPanel = useCallback(async () => {
+    setDataLoading(true);
+    setDataError(null);
+    try {
+      const [status, summary] = await Promise.all([
+        invoke<IngestStatus>("ingest_status"),
+        invoke<TokenSummary>("token_summary", { period: "today" }),
+      ]);
+      setIngestStatus(status);
+      setTodaySummary(summary);
+    } catch (err) {
+      setDataError(String(err));
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDev) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [status, summary] = await Promise.all([
+          invoke<IngestStatus>("ingest_status"),
+          invoke<TokenSummary>("token_summary", { period: "today" }),
+        ]);
+        if (cancelled) return;
+        setIngestStatus(status);
+        setTodaySummary(summary);
+      } catch (err) {
+        if (!cancelled) setDataError(String(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDev]);
+
   return (
     <main className="settings-window">
       <h1>Notchi 设置</h1>
@@ -191,6 +255,86 @@ function SettingsApp() {
               {renderMode === "fallback" ? "fallback" : "live2d"}
             </strong>
             。生产构建不会出现。
+          </p>
+        </section>
+      ) : null}
+
+      {isDev ? (
+        <section className="settings-section">
+          <span className="settings-field-label">数据摘要（dev only）</span>
+          <div className="action-debug-row">
+            <button
+              type="button"
+              className="action-debug-btn"
+              onClick={() => void refreshDataPanel()}
+              disabled={dataLoading}
+            >
+              {dataLoading ? "刷新中…" : "刷新"}
+            </button>
+          </div>
+          {dataError ? (
+            <p className="settings-hint" role="alert">
+              错误：{dataError}
+            </p>
+          ) : null}
+          <ul className="settings-data-list">
+            <li>
+              Claude Code 数据目录：
+              <strong>
+                {ingestStatus?.claude_code_found
+                  ? "已找到"
+                  : "未找到（S18 引导待 T2.10）"}
+              </strong>
+            </li>
+            <li>
+              已采集 events：
+              <strong>{ingestStatus?.events_count ?? "—"}</strong>
+            </li>
+            <li>
+              jsonl 监听文件数：
+              <strong>{ingestStatus?.jsonl_files_watched ?? "—"}</strong>
+            </li>
+            <li>
+              最近一次 ingest：
+              <strong>{ingestStatus?.last_ingest_at ?? "—"}</strong>
+            </li>
+            <li>
+              今日解析错误：
+              <strong>{ingestStatus?.errors_today ?? 0}</strong>
+            </li>
+            <li>
+              今日 input / output：
+              <strong>
+                {todaySummary
+                  ? `${todaySummary.total_input.toLocaleString()} / ${todaySummary.total_output.toLocaleString()}`
+                  : "—"}
+              </strong>
+            </li>
+            <li>
+              今日 cache_read / cache_creation：
+              <strong>
+                {todaySummary
+                  ? `${todaySummary.total_cache_read.toLocaleString()} / ${todaySummary.total_cache_creation.toLocaleString()}`
+                  : "—"}
+              </strong>
+            </li>
+            <li>
+              今日成本：
+              <strong>
+                {todaySummary ? `$${todaySummary.total_cost_usd}` : "—"}
+              </strong>
+            </li>
+            <li>
+              主导模型：
+              <strong>{todaySummary?.dominant_model ?? "—"}</strong>
+            </li>
+            <li>
+              今日会话数：
+              <strong>{todaySummary?.session_count ?? "—"}</strong>
+            </li>
+          </ul>
+          <p className="settings-hint">
+            该面板仅 dev 构建可见，用于人工验证 T2.1–T2.5 数据通路。
           </p>
         </section>
       ) : null}

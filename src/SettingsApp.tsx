@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { emit } from "@tauri-apps/api/event";
+import {
+  PET_ACTIONS,
+  PET_SET_ACTION_EVENT,
+  type PetAction,
+  type PetSetActionPayload,
+} from "./stores/petStore";
 
 type NotchMode = "auto" | "force-notch" | "force-no-notch";
 
@@ -13,10 +20,19 @@ const NOTCH_MODE_OPTIONS: ReadonlyArray<{ value: NotchMode; label: string }> = [
   { value: "force-no-notch", label: "强制按无刘海定位" },
 ];
 
+const PET_ACTION_LABELS: Record<PetAction, string> = {
+  idle: "Idle",
+  coding: "Coding",
+  waiting: "Waiting",
+  done: "Done",
+  sleep: "Sleep",
+};
+
 function SettingsApp() {
   const [store, setStore] = useState<Store | null>(null);
   const [mode, setMode] = useState<NotchMode>(DEFAULT_MODE);
   const [ready, setReady] = useState(false);
+  const [activeAction, setActiveAction] = useState<PetAction>("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +67,16 @@ function SettingsApp() {
     }
   }
 
+  async function handleActionClick(action: PetAction) {
+    setActiveAction(action);
+    try {
+      const payload: PetSetActionPayload = { action };
+      await emit(PET_SET_ACTION_EVENT, payload);
+    } catch (err) {
+      console.error("[settings] failed to emit pet action", err);
+    }
+  }
+
   return (
     <main className="settings-window">
       <h1>Notchi 设置</h1>
@@ -74,6 +100,30 @@ function SettingsApp() {
         </label>
         <p className="settings-hint">改动将在下次启动 Notchi 时生效。</p>
       </section>
+
+      {import.meta.env.DEV ? (
+        <section className="settings-section">
+          <span className="settings-field-label">动作调试（dev only）</span>
+          <div className="action-debug-row">
+            {PET_ACTIONS.map((action) => (
+              <button
+                key={action}
+                type="button"
+                className={
+                  "action-debug-btn" +
+                  (action === activeAction ? " is-active" : "")
+                }
+                onClick={() => handleActionClick(action)}
+              >
+                {PET_ACTION_LABELS[action]}
+              </button>
+            ))}
+          </div>
+          <p className="settings-hint">
+            通过 Tauri event 触发宠物窗口动作切换；生产构建不会出现。
+          </p>
+        </section>
+      ) : null}
 
       <p className="settings-placeholder">其他设置项将在 T2.x 阶段填充。</p>
     </main>

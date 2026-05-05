@@ -54,3 +54,36 @@ body,
   color: var(--muted-foreground, #888);
   font-size: 12px;
 }
+
+.action-debug-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.action-debug-btn {
+  appearance: none;
+  border: 1px solid var(--border, #d4d4d4);
+  background: var(--secondary, #f5f5f5);
+  color: var(--secondary-foreground, #1a1a1a);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.action-debug-btn:hover {
+  border-color: var(--ring, #999);
+}
+
+.action-debug-btn.is-active {
+  background: var(--primary, #1a1a1a);
+  color: var(--primary-foreground, #fafafa);
+  border-color: var(--primary, #1a1a1a);
+}

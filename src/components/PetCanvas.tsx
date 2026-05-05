@@ -123,8 +123,7 @@ export function PetCanvas() {
             applySleepEyelids(model);
           }
         };
-        const motionEmitter = loaded.internalModel
-          .motionManager as unknown as {
+        const motionEmitter = loaded.internalModel.motionManager as unknown as {
           on: (event: string, fn: () => void) => void;
           off: (event: string, fn: () => void) => void;
         };

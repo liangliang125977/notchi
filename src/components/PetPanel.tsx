@@ -16,7 +16,17 @@ import type { SourceStatus } from "../lib/dataTypes";
 
 type NotchMode = "auto" | "force-notch" | "force-no-notch";
 
+interface ScreenInfo {
+  id: string;
+  name: string;
+  is_main: boolean;
+  has_notch: boolean;
+  width: number;
+  height: number;
+}
+
 const NOTCH_MODE_KEY = "notchMode";
+const TARGET_SCREEN_ID_KEY = "targetScreenId";
 const STORE_PATH = "settings.json";
 const DEFAULT_MODE: NotchMode = "auto";
 
@@ -40,6 +50,8 @@ export function PetPanel() {
   const [ready, setReady] = useState(false);
   const [activeAction, setActiveAction] = useState<PetAction>("idle");
   const [renderMode, setRenderMode] = useState<PetRenderMode>("live2d");
+  const [screens, setScreens] = useState<ScreenInfo[]>([]);
+  const [targetScreen, setTargetScreen] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +62,22 @@ export function PetPanel() {
           autoSave: true,
         });
         const stored = await s.get<NotchMode>(NOTCH_MODE_KEY);
+        const storedTarget = await s.get<string | null>(TARGET_SCREEN_ID_KEY);
         if (cancelled) return;
         setStore(s);
         setMode(stored ?? DEFAULT_MODE);
+        setTargetScreen(storedTarget ?? null);
         setReady(true);
       } catch (err) {
         console.error("[pet-panel] failed to load store", err);
         if (!cancelled) setReady(true);
+      }
+
+      try {
+        const list = await invoke<ScreenInfo[]>("list_screens");
+        if (!cancelled) setScreens(list);
+      } catch (err) {
+        console.error("[pet-panel] failed to list screens", err);
       }
     })();
     return () => {
@@ -91,6 +112,15 @@ export function PetPanel() {
       await store.set(NOTCH_MODE_KEY, next);
     } catch (err) {
       console.error("[pet-panel] failed to persist notchMode", err);
+    }
+  }
+
+  async function handleTargetScreenChange(next: string | null) {
+    setTargetScreen(next);
+    try {
+      await invoke("set_target_screen_id", { id: next });
+    } catch (err) {
+      console.error("[pet-panel] failed to persist targetScreenId", err);
     }
   }
 
@@ -189,6 +219,41 @@ export function PetPanel() {
               </option>
             ))}
           </select>
+        </div>
+      </section>
+
+      <section className="sp-section">
+        <header className="sp-section-head">
+          <h3>Target display</h3>
+          <p className="sp-section-hint">
+            Pick which screen Notchi docks onto. Defaults to the current main
+            display.
+          </p>
+        </header>
+        <div className="sp-section-body">
+          <select
+            className="sp-input sp-input-select"
+            value={targetScreen ?? ""}
+            disabled={!ready}
+            onChange={(e) =>
+              void handleTargetScreenChange(
+                e.target.value === "" ? null : e.target.value,
+              )
+            }
+          >
+            <option value="">Main (follow active display)</option>
+            {screens.map((sc) => (
+              <option key={sc.id} value={sc.id}>
+                {sc.name}
+                {sc.is_main ? " · main" : ""}
+                {sc.has_notch ? " · notch" : ""} · {Math.round(sc.width)}×
+                {Math.round(sc.height)}
+              </option>
+            ))}
+          </select>
+          {screens.length === 0 ? (
+            <p className="sp-hint">No additional displays detected.</p>
+          ) : null}
         </div>
       </section>
 

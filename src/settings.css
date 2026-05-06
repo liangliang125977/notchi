@@ -275,6 +275,42 @@ body {
   cursor: not-allowed;
 }
 
+.ov-pill-btn {
+  appearance: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.ov-pill-btn:hover:not(.is-active) {
+  background: rgba(0, 0, 0, 0.09);
+}
+
+.ov-loading-dot {
+  margin-left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sp-accent);
+  opacity: 0.45;
+  animation: ov-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes ov-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
 .ov-link-btn {
   margin-left: auto;
   appearance: none;
@@ -1117,5 +1153,195 @@ body {
   }
   .settings-banner-warn-dismiss:hover {
     color: rgba(255, 220, 170, 0.95);
+  }
+}
+
+/* ─── Sessions panel ──────────────────────────────────────────── */
+
+.sx-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sx-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sx-head-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sx-search {
+  flex: 1 1 220px;
+  appearance: none;
+  background: var(--sp-input-bg);
+  border: 0.5px solid var(--sp-input-border);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--sp-card-fg);
+  outline: none;
+}
+
+.sx-search:focus {
+  border-color: var(--sp-accent);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.18);
+}
+
+.sx-period {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sx-foot {
+  margin: 0;
+  font-size: 11px;
+  color: var(--sp-muted);
+}
+
+.sx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--sp-card-bg);
+  border: 0.5px solid var(--sp-card-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.sx-table thead th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--sp-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.025);
+  border-bottom: 0.5px solid var(--sp-divider);
+}
+
+.sx-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 0.5px solid var(--sp-divider);
+  vertical-align: middle;
+  color: var(--sp-card-fg);
+}
+
+.sx-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sx-row {
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.sx-row:hover {
+  background: rgba(0, 122, 255, 0.05);
+}
+
+.sx-row.is-open {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.sx-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
+.sx-td-time {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.sx-date {
+  font-size: 11px;
+  color: var(--sp-muted);
+}
+
+.sx-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.sx-td-project {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sx-td-model,
+.sx-td-source {
+  white-space: nowrap;
+  color: var(--sp-muted);
+  font-size: 11.5px;
+}
+
+.sx-row-detail td {
+  background: rgba(0, 0, 0, 0.02);
+  padding: 12px 14px;
+}
+
+.sx-detail {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 24px;
+}
+
+.sx-detail > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sx-detail dt {
+  font-size: 10.5px;
+  color: var(--sp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sx-detail dd {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--sp-card-fg);
+  word-break: break-all;
+}
+
+.sx-detail dd.is-mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sx-table {
+    background: rgba(28, 28, 30, 0.6);
+  }
+  .sx-table thead th {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .sx-row:hover {
+    background: rgba(10, 132, 255, 0.16);
+  }
+  .sx-row.is-open {
+    background: rgba(10, 132, 255, 0.22);
+  }
+  .sx-row-detail td {
+    background: rgba(255, 255, 255, 0.03);
   }
 }

@@ -18,6 +18,9 @@ const NOTCH_MODE_KEY: &str = "notchMode";
 /// Settings key for SPEC §4 S8/S19 — last user-chosen pet window
 /// position (`null` means "use the default notch position").
 const WINDOW_POSITION_KEY: &str = "windowPosition";
+/// SPEC §3 v1.2 — user-chosen target display (`localizedName`). `null`
+/// means "follow the current main display".
+const TARGET_SCREEN_ID_KEY: &str = "targetScreenId";
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -44,7 +47,9 @@ fn pet_default_target_position(app: tauri::AppHandle) -> Result<PetTargetPositio
             return Err("pet window not found".into());
         };
         let mode = read_notch_mode(&app);
-        let (x, y) = macos::pet_target_position(&window, mode).map_err(|e| e.to_string())?;
+        let target = read_target_screen_id(&app);
+        let (x, y) = macos::pet_target_position_on(&window, mode, target.as_deref())
+            .map_err(|e| e.to_string())?;
         Ok(PetTargetPosition {
             x,
             y,
@@ -95,6 +100,49 @@ fn open_macos_notifications_settings() -> Result<(), String> {
     }
 }
 
+/// SPEC §3 v1.2 — list every connected display so Settings can offer
+/// a picker. Empty on non-macOS.
+#[tauri::command]
+#[cfg(target_os = "macos")]
+fn list_screens() -> Vec<macos::ScreenInfo> {
+    macos::list_all_screens()
+}
+
+#[tauri::command]
+#[cfg(not(target_os = "macos"))]
+fn list_screens() -> Vec<()> {
+    Vec::new()
+}
+
+/// Persist the user's target-screen choice. `id == None` resets to
+/// "follow main display". The pet window is repositioned immediately
+/// so the user sees the change without restarting.
+#[tauri::command]
+fn set_target_screen_id(app: tauri::AppHandle, id: Option<String>) -> Result<(), String> {
+    let store = app
+        .store(SETTINGS_STORE_PATH)
+        .map_err(|e| e.to_string())?;
+    match &id {
+        Some(s) => store.set(
+            TARGET_SCREEN_ID_KEY,
+            serde_json::Value::String(s.clone()),
+        ),
+        None => store.set(TARGET_SCREEN_ID_KEY, serde_json::Value::Null),
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(pet) = app.get_webview_window("pet") {
+            let mode = read_notch_mode(&app);
+            if let Err(err) = macos::position_pet_window_on(&pet, mode, id.as_deref()) {
+                eprintln!("[v1.2] failed to retarget pet window: {err}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -107,6 +155,8 @@ pub fn run() {
             pet_default_target_position,
             pet_main_screen_id,
             open_macos_notifications_settings,
+            list_screens,
+            set_target_screen_id,
             data::commands::token_summary,
             data::commands::token_timeseries,
             data::commands::token_by_source,
@@ -116,6 +166,7 @@ pub fn run() {
             data::commands::set_pricing_entry,
             data::commands::ingest_status,
             data::commands::detected_sources,
+            data::commands::species_status,
             data::commands::get_settings,
             data::commands::set_settings,
             data::commands::set_claude_code_data_dir,
@@ -149,7 +200,13 @@ pub fn run() {
                     macos::apply_pet_window_behaviour(&pet)?;
 
                     let mode = read_notch_mode(app.handle());
-                    place_pet_window_at_startup(app.handle(), &pet, mode);
+                    let target_screen = read_target_screen_id(app.handle());
+                    place_pet_window_at_startup(
+                        app.handle(),
+                        &pet,
+                        mode,
+                        target_screen.as_deref(),
+                    );
                 }
             }
 
@@ -159,6 +216,15 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(target_os = "macos")]
+fn read_target_screen_id<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
+    app.store(SETTINGS_STORE_PATH).ok().and_then(|store| {
+        store
+            .get(TARGET_SCREEN_ID_KEY)
+            .and_then(|v| v.as_str().map(str::to_owned))
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -190,6 +256,7 @@ fn place_pet_window_at_startup<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     pet: &tauri::WebviewWindow<R>,
     mode: macos::NotchMode,
+    target_screen_id: Option<&str>,
 ) {
     let mut use_default = true;
 
@@ -199,15 +266,20 @@ fn place_pet_window_at_startup<R: tauri::Runtime>(
                 let stored_x = value.get("x").and_then(|v| v.as_f64());
                 let stored_y = value.get("y").and_then(|v| v.as_f64());
                 let stored_screen = value.get("screenId").and_then(|v| v.as_str()).map(str::to_owned);
-                let current_screen = macos::read_main_screen_id();
+                // Resolve which screen the position is supposed to live on:
+                // an explicit `targetScreenId` always wins, otherwise the
+                // current main screen (matching legacy T1.6 behaviour).
+                let active_screen = target_screen_id
+                    .map(str::to_owned)
+                    .or_else(macos::read_main_screen_id);
 
-                let screen_matches = match (&stored_screen, &current_screen) {
+                let screen_matches = match (&stored_screen, &active_screen) {
                     (Some(a), Some(b)) => a == b,
                     _ => false,
                 };
 
                 if let (Some(x), Some(y), true) = (stored_x, stored_y, screen_matches) {
-                    if macos::is_pet_window_onscreen(x, y) {
+                    if macos::is_pet_window_onscreen_for(target_screen_id, x, y) {
                         if let Err(err) = pet.set_position(LogicalPosition::new(x, y)) {
                             eprintln!("[T1.6] failed to restore pet window: {err}");
                         } else {
@@ -225,7 +297,7 @@ fn place_pet_window_at_startup<R: tauri::Runtime>(
     }
 
     if use_default {
-        if let Err(err) = macos::position_pet_window(pet, mode) {
+        if let Err(err) = macos::position_pet_window_on(pet, mode, target_screen_id) {
             eprintln!("[T1.3] failed to position pet window: {err}");
         }
     }

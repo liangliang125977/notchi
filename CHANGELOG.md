@@ -209,6 +209,89 @@ tone; adding the same cadence for pet_status keeps the CPU surface
 predictable. We additionally subscribe to the existing
 task-completed event with a 250ms re-fetch debounce so the badge /
 overview reflect a fresh feed within a frame, not a minute.
+
+## 2026-05-05 — v1.2 (multi-form, periods, sessions, multi-screen)
+
+### Period switcher — month uses `start of month`, not 30-day rolling
+
+`Period::Month` keeps SPEC §5.4's calendar-month semantics (`datetime
+('now', 'start of month')`) so the budget bar's spend matches the
+month-to-date cost. The Overview "Daily distribution (30d)" label is a
+slight lie — early in the month the chart fills only a few buckets —
+but matching the budget math is more important than the legend text.
+Recorded so a future pass can rename the label or expose a real
+"trailing 30d" period.
+
+### Day-over-day delta hidden on Week / Month
+
+The token / cost cards' delta chips only render on the Today period.
+Showing "↑12%" on a week summary would imply a "vs previous week"
+calc we don't compute (we'd need a second `token_summary` call with
+shifted bounds). Recorded as a v1.x stretch.
+
+### Sessions "All" filter capped at 30 days
+
+`recent_sessions_in(period=None)` falls back to `datetime('now', '-30
+days')` so the worst-case query never paginates the full event log.
+The chip still says "All" because that's what the user asked for; the
+foot-note hint reads "last 30 days". v1.x can lift the cap once we
+either paginate or expose a true date-range picker.
+
+### Session detail = expandable row, not a separate page
+
+The task scope explicitly skips a session detail page / per-session
+token chart. Click-to-expand reveals the full session id, project
+path, and started_at — enough to pivot to a terminal — without
+shipping a 6th tab.
+
+### Multi-screen identity = `localizedName`, same as window-position
+
+Reused `NSScreen.localizedName` as the screen identifier instead of
+`NSScreen.deviceDescription[NSScreenNumber]` so the new
+`targetScreenId` setting interoperates with the existing
+`windowPosition.screenId` recovery path (T1.6). The trade-off is two
+identical-name external monitors are indistinguishable; a future pass
+can switch to `displayID` if it bites.
+
+### `target_screen_id` mismatch with stored `windowPosition.screenId`
+
+When the user picks a non-main display in Settings, the frontend
+drag-end handler still records `pet_main_screen_id()` into
+`windowPosition.screenId`. On next launch we treat the override as
+authoritative and discard the position when names disagree (which
+they will on every restart). Net effect: the pet always lands at the
+default notch position on the chosen screen. Acceptable for v1.2;
+ideally drag-end would persist the *target* id, not the *main* id —
+deferred so we don't re-touch the T1.6 hot path tonight.
+
+### Species: cat is the safe default, crab/fox unlock at 100K tokens
+
+The classifier walks the top-cost project's filesystem (depth 6, 2k
+file cap, skipping `node_modules` / `.git` / `target` / `dist` /
+`build` / `.venv` / `venv` / `__pycache__` / `.next` / `.cache`).
+Species sticks to `cat` until the project crosses 100K cumulative
+tokens AND a single language family exceeds 30% extension share, so
+a one-day TS PR doesn't immediately turn the pet into a fox. The
+filesystem walk is on-demand only (5-min auto-refresh + on mount);
+nothing scans on every event ingest.
+
+### Multi-form is emoji + a chip, not a real Live2D swap
+
+Per task constraint: ship the *logic layer* (species inference, lock
+progress) and surface it as a top-left badge with hover tooltip.
+Actual multi-Live2D rendering remains out of scope for v1.x — an
+animated crab/snake/etc. would require new licensed assets and a
+second model loader, both of which the MVP scope explicitly defers.
+
+### macOS `pet_target_position` consolidated to a single `_on` variant
+
+Adding the `target_screen_id` parameter exposed three near-duplicate
+helpers (`pet_target_position`, `position_pet_window`,
+`is_pet_window_onscreen`). Collapsed to `_on` / `_for` variants that
+take an `Option<&str>` so we don't have to keep two copies in sync.
+The legacy names are gone; nothing outside the macos module called
+them.
+
 ## 2026-05-05 — T3.1–T3.4 (emotion + notifications)
 
 ### Bubble shows above Mao's head, not on the right

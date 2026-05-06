@@ -20,6 +20,7 @@ pub mod pricing;
 pub mod queries;
 pub mod sessions;
 pub mod sources;
+pub mod species;
 
 use std::sync::Arc;
 

@@ -5,10 +5,8 @@ import { load } from "@tauri-apps/plugin-store";
 import { PetCanvas } from "./components/PetCanvas";
 import { PetFallbackImage } from "./components/PetFallbackImage";
 import { L2Capsule } from "./components/L2Capsule";
-import { SpeciesBadge } from "./components/SpeciesBadge";
 import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
-import { EvolutionBadge } from "./components/EvolutionBadge";
 import { EvolutionBurst } from "./components/EvolutionBurst";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
@@ -136,9 +134,7 @@ function App() {
           : <PetFallbackImage size={petDim} />}
       </div>
       <L2Capsule visible={expanded} />
-      <SpeciesBadge />
       <PetBubble />
-      <EvolutionBadge />
       <EvolutionBurst stage={evolutionUp} onDone={acknowledgeEvolutionUp} />
       <WelcomeCard />
     </div>

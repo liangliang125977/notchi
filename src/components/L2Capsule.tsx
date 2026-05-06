@@ -32,9 +32,9 @@ export function L2Capsule({ visible }: Props) {
       {visible ? (
         <motion.div
           className="l2-capsule"
-          initial={{ opacity: 0, scale: 0.92, y: -4 }}
+          initial={{ opacity: 0, scale: 0.95, y: -6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: -2 }}
+          exit={{ opacity: 0, scale: 0.97, y: -4 }}
           transition={SPRING}
         >
           <CapsuleRow snap={snap} />

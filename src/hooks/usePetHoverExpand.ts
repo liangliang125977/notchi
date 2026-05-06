@@ -6,20 +6,18 @@ import {
 } from "@tauri-apps/api/window";
 import { PET_SIZE_LARGE, PET_SIZE_SMALL, type PetSize } from "../stores/petStore";
 
-// SPEC §4 S6 / §5.3 — hover the pet 300ms → window grows rightward
-// (pet stays in left slot, capsule fills right 240px). Leave → 1s
-// linger → shrink back. Window anchored to pet's current top-left.
-// Capsule width is always 240px regardless of pet size.
+// hover the pet 300ms → window grows downward, info card appears below.
+// Leave → 1s linger → shrink back. Width stays constant.
 
-const CAPSULE_W = 240;
+const CARD_H = 96;
 
 function getSizes(petSize: PetSize) {
   const pet = petSize === "small" ? PET_SIZE_SMALL : PET_SIZE_LARGE;
   return {
     COLLAPSED_W: pet,
     COLLAPSED_H: pet,
-    EXPANDED_W: pet + CAPSULE_W,
-    EXPANDED_H: pet,
+    EXPANDED_W: pet,
+    EXPANDED_H: pet + CARD_H,
   };
 }
 

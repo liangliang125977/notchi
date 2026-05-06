@@ -88,6 +88,9 @@ pnpm tauri build    # release .app + .dmg under src-tauri/target/release/bundle/
 > If your `cc` is shadowed by a Homebrew shim (e.g. `claude-code-switcher`),
 > prefix every `cargo` / `pnpm tauri` invocation with `PATH=/usr/bin:$HOME/.cargo/bin:$PATH`.
 
+For setting up Notchi on a fresh Mac, or moving the project between
+machines, see [MIGRATION.md](./MIGRATION.md).
+
 ## Repository layout
 
 ```

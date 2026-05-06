@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { usePetStore, type PetSize } from "../stores/petStore";
 import {
   PET_ACTIONS,
   PET_FORCE_FALLBACK_EVENT,
@@ -27,6 +28,7 @@ interface ScreenInfo {
 
 const NOTCH_MODE_KEY = "notchMode";
 const TARGET_SCREEN_ID_KEY = "targetScreenId";
+const PET_SIZE_KEY = "petSize";
 const STORE_PATH = "settings.json";
 const DEFAULT_MODE: NotchMode = "auto";
 
@@ -48,6 +50,8 @@ export function PetPanel() {
   const [store, setStore] = useState<Store | null>(null);
   const [mode, setMode] = useState<NotchMode>(DEFAULT_MODE);
   const [ready, setReady] = useState(false);
+  const petSize = usePetStore((s) => s.petSize);
+  const setPetSizeStore = usePetStore((s) => s.setPetSize);
   const [activeAction, setActiveAction] = useState<PetAction>("idle");
   const [renderMode, setRenderMode] = useState<PetRenderMode>("live2d");
   const [screens, setScreens] = useState<ScreenInfo[]>([]);
@@ -58,15 +62,17 @@ export function PetPanel() {
     void (async () => {
       try {
         const s = await load(STORE_PATH, {
-          defaults: { [NOTCH_MODE_KEY]: DEFAULT_MODE },
+          defaults: { [NOTCH_MODE_KEY]: DEFAULT_MODE, [PET_SIZE_KEY]: "large" },
           autoSave: true,
         });
         const stored = await s.get<NotchMode>(NOTCH_MODE_KEY);
         const storedTarget = await s.get<string | null>(TARGET_SCREEN_ID_KEY);
+        const storedSize = await s.get<PetSize>(PET_SIZE_KEY);
         if (cancelled) return;
         setStore(s);
         setMode(stored ?? DEFAULT_MODE);
         setTargetScreen(storedTarget ?? null);
+        if (storedSize) setPetSizeStore(storedSize);
         setReady(true);
       } catch (err) {
         console.error("[pet-panel] failed to load store", err);
@@ -104,6 +110,15 @@ export function PetPanel() {
       unlisten?.();
     };
   }, []);
+
+  async function handlePetSizeChange(next: PetSize) {
+    setPetSizeStore(next);
+    try {
+      await invoke("set_pet_size", { size: next });
+    } catch (err) {
+      console.error("[pet-panel] set_pet_size failed", err);
+    }
+  }
 
   async function handleNotchModeChange(next: NotchMode) {
     setMode(next);
@@ -207,6 +222,35 @@ export function PetPanel() {
           Restart Notchi or check the console for details.
         </div>
       ) : null}
+
+      <section className="sp-section">
+        <header className="sp-section-head">
+          <h3>Pet size</h3>
+          <p className="sp-section-hint">
+            Large (240 px) or Small (120 px). Takes effect immediately.
+          </p>
+        </header>
+        <div className="sp-section-body">
+          <div className="sp-action-row">
+            <button
+              type="button"
+              className={"sp-chip" + (petSize === "large" ? " is-active" : "")}
+              disabled={!ready}
+              onClick={() => void handlePetSizeChange("large")}
+            >
+              Large
+            </button>
+            <button
+              type="button"
+              className={"sp-chip" + (petSize === "small" ? " is-active" : "")}
+              disabled={!ready}
+              onClick={() => void handlePetSizeChange("small")}
+            >
+              Small
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="sp-section">
         <header className="sp-section-head">

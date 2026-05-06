@@ -2,6 +2,10 @@ import { create } from "zustand";
 
 export type PetRenderMode = "live2d" | "fallback";
 
+export type PetSize = "large" | "small";
+export const PET_SIZE_LARGE = 240;
+export const PET_SIZE_SMALL = 120;
+
 export type PetAction = "idle" | "coding" | "waiting" | "done" | "sleep";
 
 export const PET_ACTIONS: readonly PetAction[] = [
@@ -49,11 +53,13 @@ interface PetState {
   bubble: PetBubble | null;
   muteWindowStart: string | null;
   muteWindowEnd: string | null;
+  petSize: PetSize;
   setRenderMode: (mode: PetRenderMode) => void;
   setAction: (action: PetAction) => void;
   setMuteWindow: (start: string | null, end: string | null) => void;
   showBubble: (text: string, durationMs?: number) => void;
   hideBubble: () => void;
+  setPetSize: (size: PetSize) => void;
 }
 
 const DEFAULT_BUBBLE_MS = 3500;
@@ -96,10 +102,12 @@ export const usePetStore = create<PetState>((set, get) => ({
   bubble: null,
   muteWindowStart: null,
   muteWindowEnd: null,
+  petSize: "large",
   setRenderMode: (mode) => set({ renderMode: mode }),
   setAction: (action) => set({ currentAction: action }),
   setMuteWindow: (start, end) =>
     set({ muteWindowStart: start, muteWindowEnd: end }),
+  setPetSize: (size) => set({ petSize: size }),
   showBubble: (text, durationMs = DEFAULT_BUBBLE_MS) => {
     const { muteWindowStart, muteWindowEnd } = get();
     if (isMuted(muteWindowStart, muteWindowEnd)) return;

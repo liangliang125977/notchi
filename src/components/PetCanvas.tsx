@@ -57,7 +57,11 @@ async function playMotion(model: Live2DModel, action: PetAction) {
   }
 }
 
-export function PetCanvas() {
+interface PetCanvasProps {
+  size?: number;
+}
+
+export function PetCanvas({ size = CANVAS_SIZE }: PetCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
 
@@ -78,7 +82,10 @@ export function PetCanvas() {
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
-    container.appendChild(app.view as HTMLCanvasElement);
+    const canvas = app.view as HTMLCanvasElement;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    container.appendChild(canvas);
 
     let model: Live2DModel | null = null;
     let cancelled = false;
@@ -191,5 +198,5 @@ export function PetCanvas() {
     };
   }, []);
 
-  return <div ref={containerRef} className="pet-canvas-inner" />;
+  return <div ref={containerRef} className="pet-canvas-inner" style={{ width: size, height: size }} />;
 }

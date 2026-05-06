@@ -121,7 +121,94 @@ collide in practice but a future adapter that reuses simple ids (e.g.
 just namespaced internally. The session-tracker emit events
 (`pet:task-completed`, `pet:pending-input`) gain a `source` field so
 the UI can route them correctly.
+## 2026-05-05 — v1.1 (evolution + feeding mechanics)
 
+### Stage thresholds: 100K / 1M cumulative tokens
+
+SPEC §3 lists the v1.1 evolution feature without numeric thresholds.
+We picked Egg < 100K, Hatchling < 1M, Adult ≥ 1M cumulative tokens
+(input + output + cache_read + cache_creation, summed across all
+sources). Cumulative-only is the simplest gate that already has data
+on disk; no new schema column needed. Reasoning:
+- 100K is a single moderate Sonnet day, hits within hours of normal
+  use, gives the user fast feedback that the pet "responds"
+- 1M is roughly two weeks of dedicated coding, paces the final
+  unlock so the Adult stage feels earned
+- We sum all token kinds (cache included) because v1.1 is a growth
+  signal, not a cost signal — the L1 colour tone in SPEC §5.2 is the
+  cost surface, and we don't want the pet to stagnate on cache-heavy
+  workloads.
+
+### Feed level: +10 per task, -5 per hour, max 100
+
+No SPEC numbers existed. Picked these to give a happy/content/hungry
+cycle on a one-day timescale:
+- A productive day with ~10 task completions saturates to 100 within
+  an hour
+- After saturation, hunger creeps in at 5 pts/h → fully hungry after
+  ~16 idle hours, matching an overnight gap
+- Decay is lazy: applied only when `pet_status` / `record_feed` are
+  invoked, computed from `fed_at` (no cron needed). Trade-off: feed
+  level is "stale" between calls, but the UI re-fetches on the
+  60s interval inside `usePetStatus`, so the worst-case staleness is
+  60s.
+
+Mood thresholds (from §3 phrasing only, not numeric):
+- < 20: hungry
+- < 70: content
+- ≥ 70: happy
+
+### Storage: settings.json, no schema migration
+
+We deliberately did NOT add a column to the events table for feed
+events. The user prompt explicitly said `不要重写后端 schema`. Instead:
+- `feedLevel` (i64) — current saturation
+- `fedAt` (RFC3339) — last update timestamp; decay computed from this
+- `feedLog` (array) — ring buffer of last 5 record_feed entries
+
+This keeps the privacy posture identical to T3 (no project paths,
+no content) — the feed log records only `source` ("claude-code") and
+`model` (e.g. "claude-sonnet-4-6").
+
+### Visual stage indicator: badge + outline filter, NOT model swap
+
+The user prompt was explicit: "只有 Mao_Pro 一个模型，不能切形态."
+We expressed stage via:
+1. Top-right pinned badge with stage emoji + name. Hover reveals a
+   tooltip with progress to next threshold.
+2. CSS `drop-shadow` filter composed with the existing budget tone
+   filter. Stage 0 → soft warm aura; Stage 1 → golden glow; Stage 2
+   → blue-shifted double halo.
+
+We did NOT add a one-shot fireworks burst on Adult promotion this
+iteration — would require state to detect transitions across
+sessions, and the spec wanted minimal scope. Punted.
+
+### Badge placement: top:6px, left:178px
+
+The pet window is 240×240 in the left of a 100vw flex layout, so the
+absolute coords are relative to the wrapper. We left a 4px breathing
+gap from the top-right corner; the badge does not overlap the L2
+capsule (which lives further right when expanded) and stays clear
+of the bubble (top:8px, left:120px, centred above Mao's head).
+
+### Tauri commands added
+
+- `evolution_status() -> EvolutionStatus`
+- `pet_status() -> PetStatus { feed_level, mood, fed_at, evolution, recent_feeds }`
+- `record_feed({ source?, model? }) -> PetStatus`
+
+`record_feed` is called by `useEmotionEngine` from the existing
+`pet:task-completed` listener — no new event types, no new payload
+fields beyond what T3.3 already emits.
+
+### `usePetStatus` polls every 60s + listens to `pet:task-completed`
+
+Rationale: the pet window already burns one IPC/min for the budget
+tone; adding the same cadence for pet_status keeps the CPU surface
+predictable. We additionally subscribe to the existing
+task-completed event with a 250ms re-fetch debounce so the badge /
+overview reflect a fresh feed within a frame, not a minute.
 ## 2026-05-05 — T3.1–T3.4 (emotion + notifications)
 
 ### Bubble shows above Mao's head, not on the right

@@ -378,6 +378,154 @@ body {
   background: #ff3b30;
 }
 
+/* ─── Growth section (v1.1) ─────────────────────────────────────── */
+
+.gw-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) 1fr 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.gw-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gw-stage-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.gw-stage-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gw-stage-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sp-card-fg);
+}
+
+.gw-stage-progress-label {
+  font-size: 11px;
+  color: var(--sp-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gw-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gw-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gw-stat-value {
+  font-size: 12px;
+  color: var(--sp-card-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.gw-mood {
+  font-size: 14px;
+  color: var(--sp-card-fg);
+  font-weight: 500;
+}
+
+.gw-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.gw-bar-fill {
+  height: 100%;
+  background: var(--sp-accent);
+  border-radius: 3px;
+  transition: width 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.gw-bar-feed-hungry {
+  background: #ff3b30;
+}
+
+.gw-bar-feed-content {
+  background: var(--sp-accent);
+}
+
+.gw-bar-feed-happy {
+  background: #34c759;
+}
+
+.gw-feed-log {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--sp-divider);
+}
+
+.gw-feed-log-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--sp-muted);
+  margin-bottom: 8px;
+}
+
+.gw-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gw-feed-row {
+  display: grid;
+  grid-template-columns: 90px 110px 1fr;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--sp-card-fg);
+}
+
+.gw-feed-time {
+  color: var(--sp-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gw-feed-source {
+  color: var(--sp-card-fg);
+}
+
+.gw-feed-model {
+  color: var(--sp-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-color-scheme: dark) {
+  .gw-bar {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
 .ov-budget.tone-over .ov-budget-fill {
   background: linear-gradient(90deg, #ff3b30, #b3271e);
 }

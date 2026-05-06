@@ -13,6 +13,7 @@ body,
 }
 
 .pet-window {
+  position: relative;
   width: 100vw;
   height: 100vh;
   display: flex;
@@ -25,6 +26,7 @@ body,
 }
 
 .pet-canvas {
+  position: relative;
   width: 240px;
   height: 240px;
   flex: 0 0 240px;
@@ -501,5 +503,149 @@ body,
   }
   .welcome-card-warn {
     color: #ffb454;
+  }
+}
+
+/* ─── Evolution badge (v1.1) ──────────────────────────────────────
+ * Pinned to the top-right of the 240×240 pet slot. Avoids the L2
+ * capsule, which lives further right when expanded. The pet window
+ * extends 100vw to accommodate the capsule, but the badge anchors to
+ * the pet's own square via `left: 240px` minus its own width.
+ */
+
+.evo-badge {
+  position: absolute;
+  top: 6px;
+  left: 178px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px 3px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    0 2px 6px rgba(0, 0, 0, 0.1);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  color: rgba(20, 20, 20, 0.82);
+  cursor: default;
+  pointer-events: auto;
+  z-index: 11;
+  font-variant-numeric: tabular-nums;
+}
+
+.evo-badge-emoji {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.evo-badge-name {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.evo-badge-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 156px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+  font-size: 11px;
+  color: rgba(20, 20, 20, 0.82);
+  z-index: 12;
+  pointer-events: none;
+}
+
+.evo-badge-tooltip-row {
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+
+.evo-badge-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.evo-badge-bar-fill {
+  height: 100%;
+  background: rgba(0, 122, 255, 0.85);
+  border-radius: 999px;
+  transition: width 200ms ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  .evo-badge {
+    background: rgba(28, 28, 30, 0.78);
+    color: rgba(245, 245, 247, 0.92);
+    box-shadow:
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 0 0 0.5px rgba(0, 0, 0, 0.5),
+      0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .evo-badge-tooltip {
+    background: rgba(28, 28, 30, 0.88);
+    color: rgba(245, 245, 247, 0.95);
+    box-shadow:
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 0 0 0.5px rgba(0, 0, 0, 0.5),
+      0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+  .evo-badge-bar {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .evo-badge-bar-fill {
+    background: rgba(10, 132, 255, 0.85);
+  }
+}
+
+/* v1.1 polish — evolution burst overlay (one-shot animation when the
+   pet advances a stage). Anchored to the pet window centre, particles
+   spread outward and fade. Pointer-events:none so it never blocks
+   drag/click. */
+.evolution-burst {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 6;
+}
+.evolution-burst-glyph {
+  position: absolute;
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 220, 100, 0.85));
+  pointer-events: none;
+}
+.evolution-burst-center {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(255, 230, 150, 0.95))
+    drop-shadow(0 0 24px rgba(255, 200, 80, 0.55));
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .evolution-burst-glyph {
+    filter: drop-shadow(0 0 7px rgba(255, 220, 110, 0.95));
+  }
+  .evolution-burst-center {
+    filter: drop-shadow(0 0 14px rgba(255, 230, 150, 1))
+      drop-shadow(0 0 28px rgba(255, 200, 80, 0.7));
   }
 }

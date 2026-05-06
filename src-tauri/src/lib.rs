@@ -121,6 +121,9 @@ pub fn run() {
             data::commands::set_claude_code_data_dir,
             data::commands::clear_all_events,
             data::commands::rescan_now,
+            data::evolution::evolution_status,
+            data::evolution::pet_status,
+            data::evolution::record_feed,
         ])
         .setup(|app| {
             // T2 — install the data layer (pool + backfill + watcher).

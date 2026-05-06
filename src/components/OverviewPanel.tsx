@@ -8,6 +8,7 @@ import type {
   TimeseriesPoint,
   TokenSummary,
 } from "../lib/dataTypes";
+import { GrowthSection } from "./GrowthSection";
 import {
   formatCost,
   formatModel,
@@ -229,6 +230,8 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
         </header>
         <RecentSessions rows={s.recent} />
       </section>
+
+      <GrowthSection />
     </div>
   );
 }

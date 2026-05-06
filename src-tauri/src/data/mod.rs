@@ -14,6 +14,7 @@
 
 pub mod commands;
 pub mod db;
+pub mod evolution;
 pub mod ingest;
 pub mod pricing;
 pub mod queries;

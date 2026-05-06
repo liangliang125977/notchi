@@ -11,7 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 use super::queries::{self, GroupRow, Period, PricingEntry, SessionRow, TimeseriesPoint, TokenSummary};
 use super::sessions::SessionTracker;
-use super::{ingest, DataState, IngestStatus};
+use super::{ingest, DataState, IngestStatus, SourceStatus};
 
 const SETTINGS_STORE: &str = "settings.json";
 
@@ -91,6 +91,13 @@ pub async fn set_pricing_entry(
 #[tauri::command]
 pub async fn ingest_status(state: State<'_, DataState>) -> Result<IngestStatus, String> {
     Ok(state.status.lock().await.clone())
+}
+
+/// v1.0 — list every detected data source for the L3 settings UI.
+/// Always returns a snapshot view; safe to poll every few seconds.
+#[tauri::command]
+pub async fn detected_sources(state: State<'_, DataState>) -> Result<Vec<SourceStatus>, String> {
+    Ok(state.status.lock().await.sources.clone())
 }
 
 #[derive(serde::Serialize)]
@@ -229,8 +236,10 @@ pub async fn rescan_now(state: State<'_, DataState>) -> Result<(), String> {
     Ok(())
 }
 
-/// Wire-up helper: spawn the watcher + initial backfill. Returns the
-/// state that should be `manage()`d by the Tauri builder.
+/// Wire-up helper: resolve every adapter, spawn one backfill +
+/// watcher task per detected source, plus the shared pending-input
+/// poller. Returns the state that should be `manage()`d by the Tauri
+/// builder.
 pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<DataState, String> {
     use tokio::sync::{Mutex, Notify};
 
@@ -242,17 +251,24 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
         .await
         .map_err(|e| format!("seed pricing: {e}"))?;
 
-    let data_dir = ingest::resolve_data_dir(app);
+    let resolved = ingest::resolve_sources(app);
+    let claude_dir = resolved
+        .iter()
+        .find(|r| r.adapter.name() == "claude-code")
+        .and_then(|r| r.paths.first().map(|p| p.to_string_lossy().to_string()));
+    let claude_found = claude_dir.is_some();
+    let initial_sources = ingest::make_initial_source_status(&resolved);
+
     let status = Arc::new(Mutex::new(IngestStatus {
-        claude_code_data_dir: data_dir.as_ref().map(|p| p.to_string_lossy().to_string()),
-        claude_code_found: data_dir.is_some(),
+        claude_code_data_dir: claude_dir,
+        claude_code_found: claude_found,
+        sources: initial_sources,
         ..Default::default()
     }));
     let rescan = Arc::new(Notify::new());
     let sessions = Arc::new(SessionTracker::new());
 
-    // T3.2 — pending-input poller runs unconditionally; if no data dir
-    // is configured the tracker simply stays empty.
+    // T3.2 — pending-input poller runs unconditionally.
     {
         let app_pi = app.clone();
         let tr_pi = sessions.clone();
@@ -261,28 +277,46 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
         });
     }
 
-    if let Some(dir) = data_dir {
-        let pool_bg = pool.clone();
-        let dir_bg = dir.clone();
-        let st_bg = status.clone();
-        tokio::spawn(async move {
-            if let Err(e) = ingest::backfill(pool_bg, dir_bg, st_bg).await {
-                eprintln!("[ingest] backfill failed: {e}");
-            }
-        });
+    if resolved.is_empty() {
+        eprintln!("[ingest] no data sources detected — S18 manual override required");
+    }
 
-        let pool_w = pool.clone();
-        let st_w = status.clone();
-        let rs_w = rescan.clone();
-        let app_w = app.clone();
-        let tr_w = sessions.clone();
-        tokio::spawn(async move {
-            if let Err(e) = ingest::run_watcher(app_w, pool_w, dir, st_w, rs_w, tr_w).await {
-                eprintln!("[ingest] watcher exited: {e}");
-            }
-        });
-    } else {
-        eprintln!("[ingest] ~/.claude/projects not found — S18 manual override required");
+    for r in resolved {
+        let adapter = r.adapter;
+        let roots = r.paths;
+
+        // Backfill task.
+        {
+            let pool_bg = pool.clone();
+            let st_bg = status.clone();
+            let adapter_bg = adapter.clone();
+            let roots_bg = roots.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    ingest::backfill_source(pool_bg, adapter_bg.clone(), roots_bg, st_bg).await
+                {
+                    eprintln!("[ingest:{}] backfill failed: {e}", adapter_bg.name());
+                }
+            });
+        }
+
+        // Watcher task.
+        {
+            let pool_w = pool.clone();
+            let st_w = status.clone();
+            let rs_w = rescan.clone();
+            let app_w = app.clone();
+            let tr_w = sessions.clone();
+            let adapter_w = adapter.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    ingest::run_watcher_source(app_w, pool_w, adapter_w.clone(), roots, st_w, rs_w, tr_w)
+                        .await
+                {
+                    eprintln!("[ingest:{}] watcher exited: {e}", adapter_w.name());
+                }
+            });
+        }
     }
 
     Ok(DataState { pool, status, rescan, sessions })

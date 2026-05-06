@@ -4,6 +4,124 @@ This file records SPEC ambiguities, fallback decisions, and noteworthy
 deviations encountered while implementing Coding Pet. Per `CLAUDE.md`, AI
 agents must log here rather than guess.
 
+## 2026-05-06 — v1.0 step 2 (Claude Desktop adapter)
+
+### Claude Desktop = embedded Claude Code agent + audit signature
+
+The Claude Desktop app on macOS embeds the Claude Code agent runtime
+and writes per-session `audit.jsonl` files under
+`~/Library/Application Support/Claude/local-agent-mode-sessions/<plugin>/<bucket>/local_<session>/`.
+
+The on-wire shape mirrors `~/.claude/projects/*.jsonl` (same `type`
+enum: `assistant | user | system | result | …`, same `message.usage`
+sub-keys: `input_tokens / output_tokens / cache_read_input_tokens /
+cache_creation_input_tokens`, same `message.stop_reason` semantics).
+Three differences keep us from sharing one adapter:
+
+1. `session_id` is snake_case, not `sessionId`.
+2. The timestamp lives in `_audit_timestamp` (root level), not
+   `timestamp`. Each row is also signed with `_audit_hmac`.
+3. There is no `cwd` field — Desktop sessions don't surface a project
+   path to us.
+
+Each Desktop session also drops a parallel `.claude/projects/<encoded
+cwd>/*.jsonl` tree underneath itself. Those rows are non-token bearing
+(`type=last-prompt | queue-operation | attachment | …`) and lack
+`_audit_timestamp`. Our adapter requires the audit timestamp to be
+present so the recursive walker can sweep the whole subtree harmlessly
+— non-audit rows return `None`.
+
+Adapter implementation:
+
+- `src-tauri/src/data/sources/claude_desktop.rs` (new).
+- `discover_paths` returns the single `~/Library/Application
+  Support/Claude/local-agent-mode-sessions` root when present.
+- Source name `claude-desktop` so the L3 "By tool" breakdown shows
+  Claude Desktop usage separately from Claude Code CLI.
+- Pricing reuses the Anthropic seed already in the `pricing` table.
+- `_audit_hmac` is parsed but discarded; we never log file paths or
+  message content.
+
+### Manual implementation rationale
+
+The v1.0 step 2 sub-agent hit the daily quota immediately after probing
+data layout. Schema reverse-engineering and adapter wiring were
+performed inline. No new automated tests (the existing adapters don't
+have any either); verification is by production ingest counts —
+events show up under `source='claude-desktop'` once Desktop has been
+used.
+
+## 2026-05-05 — v1.0 (multi-source ingest)
+
+### Codex jsonl schema reverse-engineered
+
+Codex CLI rollouts live at `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-<ISO>-<ULID>.jsonl`.
+Each line is one JSON object whose top-level shape is `{ type, timestamp,
+payload }`. The `type` field is one of:
+
+| `type` | What it is | Carries token usage? |
+|---|---|---|
+| `session_meta` | First line of the file. `payload` has `id` (ULID — our `session_id`), `cwd`, `originator`, `cli_version`, `model_provider`. | No |
+| `turn_context` | Per-turn config snapshot. `payload.model` is the OpenAI model id (`gpt-5`, `o4-mini`, …). | No (we cache the model name) |
+| `event_msg` | Typed CLI events. `payload.type` ∈ `{ task_started, user_message, agent_message, token_count, task_complete, exec_command_end, … }`. | `token_count` only |
+| `response_item` | Streaming model fragments (text / function_call / reasoning). | No |
+
+The token usage rides on `event_msg` rows whose `payload.type ==
+"token_count"`. The payload shape is:
+
+```text
+{ "type": "token_count",
+  "info": {
+    "model_context_window": int,
+    "last_token_usage":  { input_tokens, cached_input_tokens,
+                           output_tokens, reasoning_output_tokens,
+                           total_tokens },
+    "total_token_usage": { …same shape… }   // CUMULATIVE — do NOT sum
+  },
+  "rate_limits": { … } }
+```
+
+`info` is occasionally `null` (one observed at file head when the CLI
+reconnects to an existing session); we skip those.
+
+Two normalisation gotchas for the OpenAI-side schema vs. our SQLite
+columns (`input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens`):
+
+1. `cached_input_tokens` is part of `input_tokens` (OpenAI reports
+   them inclusive, unlike Anthropic's split). We mirror it into
+   `cache_read_input_tokens` and subtract from `input_tokens` so the
+   pricing math matches OpenAI's published cached-input rate.
+2. `reasoning_output_tokens` is billed as output tokens by OpenAI
+   (o-series). We sum them into `output_tokens`.
+
+Per-turn delta vs. cumulative: the file emits a fresh `token_count`
+row after every assistant reply with both `last_token_usage`
+(this turn) and `total_token_usage` (running session total). We
+ingest only `last_token_usage`; summing `total` would double count.
+
+User-turn detection (R1 reset) uses `event_msg.payload.type ==
+"user_message"`. Turn completion (R2) uses `event_msg.payload.type
+== "task_complete"`, which carries `turn_id` + `duration_ms`. Codex
+does not emit a Claude-style `stop_reason` enum, so we synthesise
+`"end_turn"` for any `task_complete`.
+
+When Codex is configured to drive a non-OpenAI provider
+(`session_meta.model_provider != "openai"`), `turn_context.model`
+already carries the upstream id (e.g. `claude-sonnet-4-6`); pricing
+falls through to the existing Anthropic seed by exact-match.
+
+### Multi-source SessionTracker key
+
+The original `SessionTracker` was keyed by `session_id: String`. With
+multiple sources active, ULIDs / UUIDs from different tools cannot
+collide in practice but a future adapter that reuses simple ids (e.g.
+`default`) would. The tracker now uses
+`SessionKey { source, session_id }` — same structure on the wire,
+just namespaced internally. The session-tracker emit events
+(`pet:task-completed`, `pet:pending-input`) gain a `source` field so
+the UI can route them correctly.
+
 ## 2026-05-05 — T3.1–T3.4 (emotion + notifications)
 
 ### Bubble shows above Mao's head, not on the right

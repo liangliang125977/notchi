@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import {
@@ -11,6 +12,7 @@ import {
   type PetRenderModePayload,
   type PetSetActionPayload,
 } from "../stores/petStore";
+import type { SourceStatus } from "../lib/dataTypes";
 
 type NotchMode = "auto" | "force-notch" | "force-no-notch";
 
@@ -136,6 +138,26 @@ export function PetPanel() {
 
   const isDev = import.meta.env.DEV;
 
+  const [sources, setSources] = useState<SourceStatus[]>([]);
+  useEffect(() => {
+    if (!isDev) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const list = await invoke<SourceStatus[]>("detected_sources");
+        if (!cancelled) setSources(list);
+      } catch (err) {
+        console.error("[pet-panel] detected_sources failed", err);
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [isDev]);
+
   return (
     <div className="sp-root">
       {renderMode === "fallback" ? (
@@ -229,6 +251,40 @@ export function PetPanel() {
                 Trigger done bubble + notification
               </button>
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {isDev ? (
+        <section className="sp-section">
+          <header className="sp-section-head">
+            <h3>
+              Data summary <span className="sp-tag">dev only</span>
+            </h3>
+            <p className="sp-section-hint">
+              Per-source ingest counters. Updates every 5 s.
+            </p>
+          </header>
+          <div className="sp-section-body">
+            {sources.length === 0 ? (
+              <p className="sp-empty">No data sources detected yet.</p>
+            ) : (
+              <ul className="sp-source-list">
+                {sources.map((s) => (
+                  <li key={s.name} className="sp-source-row">
+                    <span className="sp-source-name">{s.name}</span>
+                    <span className="sp-source-stat">
+                      {s.events_count.toLocaleString()} events
+                    </span>
+                    <span className="sp-source-stat">
+                      {s.last_ingest_at
+                        ? new Date(s.last_ingest_at).toLocaleTimeString()
+                        : "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
       ) : null}

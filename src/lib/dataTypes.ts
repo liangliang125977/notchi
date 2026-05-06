@@ -9,6 +9,15 @@ export type IngestStatus = {
   errors_today: number;
   claude_code_data_dir: string | null;
   claude_code_found: boolean;
+  sources: SourceStatus[];
+};
+
+export type SourceStatus = {
+  name: string;
+  roots: string[];
+  files_watched: number;
+  events_count: number;
+  last_ingest_at: string | null;
 };
 
 export type TokenSummary = {

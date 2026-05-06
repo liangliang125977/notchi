@@ -1,36 +1,16 @@
-//! T2.2 + T2.3 + T2.5 — jsonl ingestion.
+//! Multi-source jsonl ingestion (T2.2 / T2.3 / T2.5 + v1.0).
 //!
-//! ## jsonl schema (reverse-engineered from real `~/.claude/projects/*.jsonl`)
+//! The original Claude-Code-only ingest code lifted out into
+//! [`super::sources::claude_code`]. This module now orchestrates one
+//! adapter at a time through the same backfill + fsevents watcher
+//! pipeline; the v1.0 `install_all_sources` helper spawns one watcher
+//! per registered source.
 //!
-//! Each line is one JSON object with `type` ∈ {assistant, user, system,
-//! attachment, queue-operation, last-prompt, ...}. Only `type=assistant`
-//! lines carry the `usage` block we want:
-//!
-//! ```text
-//! {
-//!   "type": "assistant",
-//!   "timestamp": "<ISO-8601 UTC>",
-//!   "sessionId": "<uuid>",
-//!   "cwd": "<absolute project path>",       // privacy: not logged
-//!   "requestId": "<opaque>",                  // dedupe key
-//!   "message": {
-//!     "id": "msg_…",                          // dedupe key
-//!     "model": "claude-opus-4-7" | …,
-//!     "usage": {
-//!       "input_tokens": int,
-//!       "output_tokens": int,
-//!       "cache_read_input_tokens": int,
-//!       "cache_creation_input_tokens": int,
-//!       …  // service_tier / inference_geo / iterations / speed / server_tool_use
-//!     }
-//!   }
-//! }
-//! ```
-//!
-//! The `cwd` field is the original project root. The directory name
-//! itself (e.g. `-Users-leon-Documents-code-foo`) is the dash-encoded
-//! variant. We persist `cwd` only as `project_path` in SQLite — never
-//! to logs.
+//! Per-source SPEC bits:
+//! - SPEC §5.7 / S13: 30-day cold-start backfill, then incremental tail.
+//! - SPEC §4 S14: malformed lines skipped, counted, logged.
+//! - Privacy (SPEC §4 S12 / CLAUDE.md): nothing here logs raw user
+//!   prompts, assistant text, or full filesystem paths.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -39,7 +19,6 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rust_decimal::Decimal;
-use serde::Deserialize;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::{mpsc, Mutex, Notify};
@@ -47,105 +26,71 @@ use walkdir::WalkDir;
 
 use super::pricing::{self, Pricing};
 use super::sessions::{CompletionEvent, SessionTracker};
-use super::{db, IngestStatus};
+use super::sources::{
+    self, claude_code::ClaudeCodeAdapter, claude_desktop::ClaudeDesktopAdapter,
+    codex::CodexAdapter, cursor::CursorAdapter, opencode::OpenCodeAdapter, DataSourceAdapter,
+    EventKind as ParsedKind, ParseAdapter,
+    ParsedEvent,
+};
+use super::{db, IngestStatus, SourceStatus};
 
 pub const TASK_COMPLETED_EVENT: &str = "pet:task-completed";
 pub const PENDING_INPUT_EVENT: &str = "pet:pending-input";
 
-const SOURCE_CLAUDE_CODE: &str = "claude-code";
 /// Cap retro-scan to recent 30 days per SPEC §5.7 (S13).
 const BACKFILL_DAYS: i64 = 30;
 
-#[derive(Debug, Deserialize)]
-struct AssistantEnvelope<'a> {
-    #[serde(rename = "type")]
-    ty: Option<&'a str>,
-    timestamp: Option<&'a str>,
-    #[serde(rename = "sessionId")]
-    session_id: Option<&'a str>,
-    cwd: Option<&'a str>,
-    #[serde(rename = "requestId")]
-    request_id: Option<&'a str>,
-    message: Option<AssistantMessage<'a>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AssistantMessage<'a> {
-    #[serde(borrow)]
-    id: Option<&'a str>,
-    #[serde(borrow)]
-    model: Option<&'a str>,
-    #[serde(borrow, rename = "stop_reason")]
-    stop_reason: Option<&'a str>,
-    usage: Option<Usage>,
-}
-
-/// Lighter-weight envelope for the session-tracker pass on user rows
-/// (assistant rows go through the typed parse that captures usage too).
-#[derive(Debug, Deserialize)]
-struct UserEnvelope<'a> {
-    #[serde(rename = "type")]
-    ty: Option<&'a str>,
-    timestamp: Option<&'a str>,
-    #[serde(rename = "sessionId")]
-    session_id: Option<&'a str>,
-    message: Option<UserMessage>,
-}
-
-/// `type=user` rows in Claude Code jsonl are emitted both for real user
-/// input and for tool_result echoes after assistant tool calls. We only
-/// want the former to count as a "user turn" for pending-input
-/// detection. Distinguishing them is content-shape based:
-/// - String content → real user input (CLI prompt text).
-/// - Array content with any element of `type: "tool_result"` → tool
-///   echo, NOT a user turn.
-#[derive(Debug, Deserialize)]
-struct UserMessage {
-    content: Option<serde_json::Value>,
-}
-
-fn user_envelope_is_real_turn(env: &UserEnvelope<'_>) -> bool {
-    match env.message.as_ref().and_then(|m| m.content.as_ref()) {
-        Some(serde_json::Value::String(_)) => true,
-        Some(serde_json::Value::Array(arr)) => !arr.iter().any(|item| {
-            item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
-        }),
-        _ => true,
+/// Resolve every adapter's discover_paths up front. Adapters whose
+/// roots don't exist on this Mac return an empty vec and we skip them
+/// from the watcher set.
+pub fn resolve_sources<R: Runtime>(app: &AppHandle<R>) -> Vec<sources::ResolvedAdapter> {
+    let mut out = Vec::new();
+    let claude = ClaudeCodeAdapter;
+    let claude_paths = claude.discover_paths(app);
+    if !claude_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(claude),
+            paths: claude_paths,
+        });
     }
+    let codex = CodexAdapter::new();
+    let codex_paths = codex.discover_paths(app);
+    if !codex_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(codex),
+            paths: codex_paths,
+        });
+    }
+    let claude_desktop = ClaudeDesktopAdapter;
+    let claude_desktop_paths = claude_desktop.discover_paths(app);
+    if !claude_desktop_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(claude_desktop),
+            paths: claude_desktop_paths,
+        });
+    }
+    // OpenCode + Cursor stubs reserved for v1.0 step 2. Their
+    // discover_paths intentionally returns empty until we have a real
+    // sample shape to parse.
+    let opencode = OpenCodeAdapter;
+    let opencode_paths = opencode.discover_paths(app);
+    if !opencode_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(opencode),
+            paths: opencode_paths,
+        });
+    }
+    let cursor = CursorAdapter;
+    let cursor_paths = cursor.discover_paths(app);
+    if !cursor_paths.is_empty() {
+        out.push(sources::ResolvedAdapter {
+            adapter: Arc::new(cursor),
+            paths: cursor_paths,
+        });
+    }
+    out
 }
 
-#[derive(Debug, Deserialize, Default)]
-#[serde(default)]
-struct Usage {
-    input_tokens: i64,
-    output_tokens: i64,
-    cache_read_input_tokens: i64,
-    cache_creation_input_tokens: i64,
-}
-
-/// Discover the Claude Code data dir. SPEC §4 S18: when the default
-/// `~/.claude/projects` does not exist, the user can override via the
-/// settings store.
-pub fn resolve_data_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<PathBuf> {
-    use tauri_plugin_store::StoreExt;
-    if let Ok(store) = app.store("settings.json") {
-        if let Some(v) = store.get("claudeCodeDataDir") {
-            if let Some(s) = v.as_str() {
-                let p = PathBuf::from(s);
-                if p.exists() {
-                    return Some(p);
-                }
-            }
-        }
-    }
-    let home = std::env::var_os("HOME")?;
-    let default = PathBuf::from(home).join(".claude/projects");
-    if default.exists() {
-        Some(default)
-    } else {
-        None
-    }
-}
 
 /// Result of one parse pass over a single jsonl file.
 #[derive(Default, Debug)]
@@ -155,11 +100,9 @@ struct ParsePass {
     completed: Vec<CompletionEvent>,
 }
 
-/// Parse jsonl bytes starting at `start_offset` and insert assistant
-/// usage rows. Returns the number of bytes consumed since the file
-/// start (i.e. the new resume point).
 async fn ingest_file(
     pool: &SqlitePool,
+    adapter: &dyn ParseAdapter,
     path: &Path,
     start_offset: u64,
     tracker: Option<&SessionTracker>,
@@ -168,9 +111,6 @@ async fn ingest_file(
     if (start_offset as usize) >= bytes.len() {
         return Ok(ParsePass::default());
     }
-    // Resume at start_offset, but cut off at the last newline so we
-    // don't try to parse a half-flushed record. Anything past the last
-    // \n is left for the next pass.
     let slice = &bytes[start_offset as usize..];
     let last_nl = slice.iter().rposition(|b| *b == b'\n');
     let (consumable, consumed) = match last_nl {
@@ -179,7 +119,7 @@ async fn ingest_file(
     };
     let new_offset = start_offset + consumed as u64;
 
-    let session_id = path
+    let default_session = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown")
@@ -190,8 +130,8 @@ async fn ingest_file(
     let mut parse_errors = 0usize;
     let mut completed: Vec<CompletionEvent> = Vec::new();
     let now_iso = Utc::now().to_rfc3339();
+    let source_name = adapter.name();
 
-    // Cache pricing per model to avoid round-tripping on every line.
     let mut pricing_cache: std::collections::HashMap<String, Pricing> =
         std::collections::HashMap::new();
 
@@ -200,122 +140,75 @@ async fn ingest_file(
             continue;
         }
 
-        // T3.2 — feed the session tracker on user lines only. Assistant
-        // lines go through the typed parse below so we record token
-        // counts at the same time.
-        if let Some(tr) = tracker {
-            if let Ok(live) = serde_json::from_slice::<UserEnvelope>(line) {
-                if live.ty == Some("user") && user_envelope_is_real_turn(&live) {
-                    let ts = live.timestamp.and_then(parse_iso);
-                    let sid_for_live = live.session_id.unwrap_or(&session_id);
-                    tr.observe_user(sid_for_live, ts);
+        let Some(parsed) = adapter.parse_line(line, &default_session) else {
+            // Adapter actively rejected — count as a parse error only
+            // if the line is non-empty JSON we couldn't classify.
+            if serde_json::from_slice::<serde_json::Value>(line).is_err() {
+                parse_errors += 1;
+            }
+            continue;
+        };
+
+        let ts = parse_iso(&parsed.timestamp);
+        let session_id = parsed.session_id.as_str();
+
+        match parsed.kind {
+            ParsedKind::UserTurn => {
+                if let Some(tr) = tracker {
+                    tr.observe_user(source_name, session_id, ts);
+                }
+                continue;
+            }
+            ParsedKind::Other => continue,
+            ParsedKind::Completion => {
+                if let Some(tr) = tracker {
+                    let res = tr.observe_assistant(
+                        source_name,
+                        session_id,
+                        ts,
+                        parsed.model.as_deref(),
+                        parsed.stop_reason.as_deref(),
+                        0,
+                    );
+                    if let Some(c) = res.completed {
+                        completed.push(c);
+                    }
+                }
+                continue;
+            }
+            ParsedKind::Assistant => {
+                let usage_total = parsed.usage.as_ref().map(|u| u.total()).unwrap_or(0);
+                if let Some(tr) = tracker {
+                    let res = tr.observe_assistant(
+                        source_name,
+                        session_id,
+                        ts,
+                        parsed.model.as_deref(),
+                        parsed.stop_reason.as_deref(),
+                        usage_total,
+                    );
+                    if let Some(c) = res.completed {
+                        completed.push(c);
+                    }
                 }
             }
         }
 
-        let env: AssistantEnvelope = match serde_json::from_slice(line) {
-            Ok(v) => v,
-            Err(_) => {
-                parse_errors += 1;
-                continue;
-            }
-        };
-        if env.ty != Some("assistant") {
+        let Some(ref usage) = parsed.usage else { continue };
+        if usage.is_empty() {
             continue;
         }
-        let Some(msg) = env.message else { continue };
-        let assistant_ts = env.timestamp.and_then(parse_iso);
-        let assistant_sid = env.session_id.unwrap_or(&session_id);
 
-        // Notify tracker even for fragments without usage (so stop_reason
-        // is recorded). For fragments without a stop_reason this is a
-        // cheap last_assistant_at touch which the tracker uses to
-        // measure idle time.
-        let usage_tokens = msg
-            .usage
-            .as_ref()
-            .map(|u| {
-                u.input_tokens
-                    + u.output_tokens
-                    + u.cache_read_input_tokens
-                    + u.cache_creation_input_tokens
-            })
-            .unwrap_or(0);
-        if let Some(tr) = tracker {
-            let res = tr.observe_assistant(
-                assistant_sid,
-                assistant_ts,
-                msg.model,
-                msg.stop_reason,
-                usage_tokens,
-            );
-            if let Some(c) = res.completed {
-                completed.push(c);
-            }
-        }
-
-        let Some(usage) = msg.usage else { continue };
-        let model = msg.model.unwrap_or("unknown").to_string();
-        // Skip rows that look entirely empty (no tokens at all).
-        if usage.input_tokens == 0
-            && usage.output_tokens == 0
-            && usage.cache_read_input_tokens == 0
-            && usage.cache_creation_input_tokens == 0
-        {
-            continue;
-        }
-        let timestamp = env.timestamp.unwrap_or("").to_string();
-        let session = env.session_id.unwrap_or(&session_id).to_string();
-        let project_path = env.cwd.map(|s| s.to_string());
-        let request_id = env.request_id.map(|s| s.to_string());
-        let message_id = msg.id.map(|s| s.to_string());
-
-        let p = if let Some(p) = pricing_cache.get(&model) {
-            p.clone()
-        } else {
-            let p = pricing::lookup(pool, &model, "").await;
-            pricing_cache.insert(model.clone(), p.clone());
-            p
-        };
-        let cost = pricing::cost_for_turn(
-            &p,
-            usage.input_tokens,
-            usage.output_tokens,
-            usage.cache_read_input_tokens,
-            usage.cache_creation_input_tokens,
-        );
-        let cost_str = decimal_to_text(cost);
-
-        // INSERT OR IGNORE leverages the partial unique index on
-        // (message_id, request_id) for dedupe across subagent mirrors.
-        let res = sqlx::query(
-            "INSERT OR IGNORE INTO events (
-                timestamp, source, model, input_tokens, output_tokens,
-                cache_read_input_tokens, cache_creation_input_tokens,
-                cost_usd, project_path, session_id, is_third_party,
-                endpoint_id, raw_event_type, message_id, request_id, ingested_at
-             ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,NULL,?11,?12,?13,?14)",
+        persist_event(
+            &mut tx,
+            &parsed,
+            usage,
+            &mut pricing_cache,
+            pool,
+            &now_iso,
         )
-        .bind(&timestamp)
-        .bind(SOURCE_CLAUDE_CODE)
-        .bind(&model)
-        .bind(usage.input_tokens)
-        .bind(usage.output_tokens)
-        .bind(usage.cache_read_input_tokens)
-        .bind(usage.cache_creation_input_tokens)
-        .bind(&cost_str)
-        .bind(project_path.as_deref())
-        .bind(&session)
-        .bind("assistant")
-        .bind(message_id.as_deref())
-        .bind(request_id.as_deref())
-        .bind(&now_iso)
-        .execute(&mut *tx)
-        .await
-        .map_err(io_other)?;
-        if res.rows_affected() > 0 {
-            inserted += 1;
-        }
+        .await?;
+        inserted += 1;
     }
 
     let mtime_iso = path
@@ -340,7 +233,6 @@ async fn ingest_file(
     .map_err(io_other)?;
 
     if parse_errors > 0 {
-        // S14: bump per-day error counter for the dev panel and the log.
         sqlx::query("INSERT INTO parse_errors_today (occurred_at) VALUES (?1)")
             .bind(&now_iso)
             .execute(&mut *tx)
@@ -350,11 +242,71 @@ async fn ingest_file(
     }
 
     tx.commit().await.map_err(io_other)?;
-    let _ = new_offset; // already persisted in ingest_state row above
-    Ok(ParsePass { inserted, parse_errors, completed })
+    Ok(ParsePass {
+        inserted,
+        parse_errors,
+        completed,
+    })
+}
+
+async fn persist_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    parsed: &ParsedEvent,
+    usage: &sources::ParsedUsage,
+    pricing_cache: &mut std::collections::HashMap<String, Pricing>,
+    pool: &SqlitePool,
+    now_iso: &str,
+) -> Result<(), std::io::Error> {
+    let model = parsed.model.clone().unwrap_or_else(|| "unknown".to_string());
+    let p = if let Some(p) = pricing_cache.get(&model) {
+        p.clone()
+    } else {
+        let p = pricing::lookup(pool, &model, "").await;
+        pricing_cache.insert(model.clone(), p.clone());
+        p
+    };
+    let cost = pricing::cost_for_turn(
+        &p,
+        usage.input,
+        usage.output,
+        usage.cache_read,
+        usage.cache_create,
+    );
+    let cost_str = decimal_to_text(cost);
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO events (
+            timestamp, source, model, input_tokens, output_tokens,
+            cache_read_input_tokens, cache_creation_input_tokens,
+            cost_usd, project_path, session_id, is_third_party,
+            endpoint_id, raw_event_type, message_id, request_id, ingested_at
+         ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,NULL,?12,?13,?14,?15)",
+    )
+    .bind(&parsed.timestamp)
+    .bind(parsed.source)
+    .bind(&model)
+    .bind(usage.input)
+    .bind(usage.output)
+    .bind(usage.cache_read)
+    .bind(usage.cache_create)
+    .bind(&cost_str)
+    .bind(parsed.project_path.as_deref())
+    .bind(&parsed.session_id)
+    .bind(if parsed.is_third_party { 1 } else { 0 })
+    .bind("assistant")
+    .bind(parsed.message_id.as_deref())
+    .bind(parsed.request_id.as_deref())
+    .bind(now_iso)
+    .execute(&mut **tx)
+    .await
+    .map_err(io_other)?;
+    Ok(())
 }
 
 fn parse_iso(s: &str) -> Option<DateTime<Utc>> {
+    if s.is_empty() {
+        return None;
+    }
     DateTime::parse_from_rfc3339(s)
         .ok()
         .map(|dt| dt.with_timezone(&Utc))
@@ -362,21 +314,16 @@ fn parse_iso(s: &str) -> Option<DateTime<Utc>> {
 
 /// T3.2 — periodic poll over the session tracker. Fires
 /// `pet:pending-input` events when a session has been quiet long
-/// enough to cross a 30/60/180-second bracket. Runs forever; cancelled
-/// only when the Tauri app exits.
+/// enough to cross a 30/60/180-second bracket.
 pub async fn run_pending_input_loop<R: Runtime>(
     app: AppHandle<R>,
     tracker: Arc<SessionTracker>,
 ) {
     let mut ticker = tokio::time::interval(Duration::from_secs(10));
-    ticker.tick().await; // discard the immediate tick
+    ticker.tick().await;
     loop {
         ticker.tick().await;
         let now = Utc::now();
-        // Drain whichever bracket fires first, then loop back through
-        // the rest on the next tick. 10s cadence means at most ~10s of
-        // latency past the bracket, which is well under the bubble
-        // budget.
         while let Some(ev) = tracker.poll_pending_input(now) {
             if let Err(e) = app.emit(PENDING_INPUT_EVENT, &ev) {
                 eprintln!("[ingest] failed to emit pending-input event: {e}");
@@ -391,7 +338,6 @@ fn io_other<E: std::fmt::Display>(e: E) -> std::io::Error {
 }
 
 fn decimal_to_text(d: Decimal) -> String {
-    // Round to 6dp so we don't accumulate noise; UI re-rounds for L2.
     d.round_dp(6).normalize().to_string()
 }
 
@@ -419,35 +365,38 @@ async fn last_offset(pool: &SqlitePool, path: &Path) -> u64 {
     row.map(|(v,)| v as u64).unwrap_or(0)
 }
 
-/// T2.3 — cold-start scan over recent jsonl files.
-pub async fn backfill(
+/// Cold-start scan over recent jsonl files for one source's roots.
+pub async fn backfill_source(
     pool: SqlitePool,
-    data_dir: PathBuf,
+    adapter: Arc<dyn ParseAdapter>,
+    roots: Vec<PathBuf>,
     status: Arc<Mutex<IngestStatus>>,
 ) -> Result<(), std::io::Error> {
     let started = std::time::Instant::now();
     let cutoff = Utc::now() - chrono::Duration::days(BACKFILL_DAYS);
 
     let mut files = Vec::new();
-    for entry in WalkDir::new(&data_dir).follow_links(false).into_iter().flatten() {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let p = entry.path();
-        if p.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
-        let mtime = p
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .map(DateTime::<Utc>::from);
-        if let Some(t) = mtime {
-            if t < cutoff {
+    for root in &roots {
+        for entry in WalkDir::new(root).follow_links(false).into_iter().flatten() {
+            if !entry.file_type().is_file() {
                 continue;
             }
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let mtime = p
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(DateTime::<Utc>::from);
+            if let Some(t) = mtime {
+                if t < cutoff {
+                    continue;
+                }
+            }
+            files.push(p.to_path_buf());
         }
-        files.push(p.to_path_buf());
     }
     let total_files = files.len();
 
@@ -455,35 +404,43 @@ pub async fn backfill(
     let mut total_errors = 0usize;
     for path in &files {
         let off = last_offset(&pool, path).await;
-        // Backfill intentionally does not feed the tracker — we don't
-        // want bubbles + notifications for events that happened days
-        // ago.
-        match ingest_file(&pool, path, off, None).await {
+        match ingest_file(&pool, adapter.as_ref(), path, off, None).await {
             Ok(p) => {
                 total_events += p.inserted;
                 total_errors += p.parse_errors;
             }
             Err(e) => {
-                eprintln!("[ingest] read error on jsonl: {e}");
+                eprintln!("[ingest:{}] read error on jsonl: {e}", adapter.name());
             }
         }
     }
 
+    let now_iso = Utc::now().to_rfc3339();
     {
         let mut s = status.lock().await;
         s.events_count = scalar_count(&pool, "SELECT COUNT(*) FROM events").await;
-        s.jsonl_files_watched = total_files as i64;
-        s.last_ingest_at = Some(Utc::now().to_rfc3339());
+        s.jsonl_files_watched = scalar_count(&pool, "SELECT COUNT(*) FROM ingest_state").await;
+        s.last_ingest_at = Some(now_iso.clone());
         s.errors_today = scalar_count(
             &pool,
             "SELECT COUNT(*) FROM parse_errors_today \
              WHERE occurred_at >= datetime('now','start of day')",
         )
         .await;
+        let entry = s
+            .sources
+            .iter_mut()
+            .find(|src| src.name == adapter.name());
+        if let Some(entry) = entry {
+            entry.files_watched = total_files as i64;
+            entry.last_ingest_at = Some(now_iso);
+            entry.events_count = scalar_count_for_source(&pool, adapter.name()).await;
+        }
     }
 
     eprintln!(
-        "[ingest] backfilled {} events from {} files in {}ms (errors: {})",
+        "[ingest:{}] backfilled {} events from {} files in {}ms (errors: {})",
+        adapter.name(),
         total_events,
         total_files,
         started.elapsed().as_millis(),
@@ -499,18 +456,20 @@ async fn scalar_count(pool: &SqlitePool, sql: &str) -> i64 {
         .unwrap_or(0)
 }
 
-/// T2.2 — fsevents-backed watcher. We forward all FS events to a
-/// tokio mpsc, debounce ~750ms, and rescan modified files. Watcher
-/// also wakes on `rescan` Notify (manual override / dev-mode reload).
-///
-/// T3.2/T3.3 — `tracker` accumulates per-session liveness so the
-/// emotion engine can fire R1/R2 bubbles + native notifications.
-/// `app` is the Tauri handle used to `emit` `pet:task-completed` and
-/// `pet:pending-input`.
-pub async fn run_watcher<R: Runtime>(
+async fn scalar_count_for_source(pool: &SqlitePool, source: &str) -> i64 {
+    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE source = ?1")
+        .bind(source)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(0)
+}
+
+/// Per-source watcher — one fsevents subscription per root.
+pub async fn run_watcher_source<R: Runtime>(
     app: AppHandle<R>,
     pool: SqlitePool,
-    data_dir: PathBuf,
+    adapter: Arc<dyn ParseAdapter>,
+    roots: Vec<PathBuf>,
     status: Arc<Mutex<IngestStatus>>,
     rescan: Arc<Notify>,
     tracker: Arc<SessionTracker>,
@@ -520,10 +479,7 @@ pub async fn run_watcher<R: Runtime>(
     let mut watcher = RecommendedWatcher::new(
         move |res: Result<Event, notify::Error>| {
             let Ok(ev) = res else { return };
-            if !matches!(
-                ev.kind,
-                EventKind::Modify(_) | EventKind::Create(_)
-            ) {
+            if !matches!(ev.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                 return;
             }
             for p in ev.paths {
@@ -534,14 +490,19 @@ pub async fn run_watcher<R: Runtime>(
         },
         Config::default().with_poll_interval(Duration::from_secs(2)),
     )?;
-    watcher.watch(&data_dir, RecursiveMode::Recursive)?;
-    eprintln!("[ingest] fsevents watcher attached");
+    for root in &roots {
+        watcher.watch(root, RecursiveMode::Recursive)?;
+    }
+    eprintln!(
+        "[ingest:{}] fsevents watcher attached to {} root(s)",
+        adapter.name(),
+        roots.len()
+    );
 
     let mut pending: std::collections::HashSet<PathBuf> = Default::default();
     let mut deadline: Option<tokio::time::Instant> = None;
 
     loop {
-        // Timer that fires when debounce window elapses.
         let sleep = match deadline {
             Some(d) => tokio::time::sleep_until(d),
             None => tokio::time::sleep(Duration::from_secs(60 * 60)),
@@ -551,10 +512,13 @@ pub async fn run_watcher<R: Runtime>(
         tokio::select! {
             biased;
             _ = rescan.notified() => {
-                // Forced rescan — re-walk all jsonl files (e.g. user
-                // pointed at a new data dir via S18 override).
-                if let Err(e) = backfill(pool.clone(), data_dir.clone(), status.clone()).await {
-                    eprintln!("[ingest] rescan failed: {e}");
+                if let Err(e) = backfill_source(
+                    pool.clone(),
+                    adapter.clone(),
+                    roots.clone(),
+                    status.clone(),
+                ).await {
+                    eprintln!("[ingest:{}] rescan failed: {e}", adapter.name());
                 }
             }
             Some(p) = rx.recv() => {
@@ -568,33 +532,41 @@ pub async fn run_watcher<R: Runtime>(
                 let mut completed: Vec<CompletionEvent> = Vec::new();
                 for path in &batch {
                     let off = last_offset(&pool, path).await;
-                    match ingest_file(&pool, path, off, Some(tracker.as_ref())).await {
+                    match ingest_file(&pool, adapter.as_ref(), path, off, Some(tracker.as_ref())).await {
                         Ok(mut p) => {
                             inserted += p.inserted;
                             completed.append(&mut p.completed);
                         }
-                        Err(e) => eprintln!("[ingest] tail err: {e}"),
+                        Err(e) => eprintln!("[ingest:{}] tail err: {e}", adapter.name()),
                     }
                 }
                 for ev in &completed {
                     if let Err(e) = app.emit(TASK_COMPLETED_EVENT, ev) {
-                        eprintln!("[ingest] failed to emit completion event: {e}");
+                        eprintln!("[ingest:{}] failed to emit completion event: {e}", adapter.name());
                     }
                 }
                 if !batch.is_empty() {
                     let count = scalar_count(&pool, "SELECT COUNT(*) FROM events").await;
+                    let now_iso = Utc::now().to_rfc3339();
                     let mut s = status.lock().await;
                     s.events_count = count;
-                    s.last_ingest_at = Some(Utc::now().to_rfc3339());
+                    s.last_ingest_at = Some(now_iso.clone());
                     s.errors_today = scalar_count(
                         &pool,
                         "SELECT COUNT(*) FROM parse_errors_today \
                          WHERE occurred_at >= datetime('now','start of day')",
                     )
                     .await;
+                    if let Some(entry) = s.sources.iter_mut().find(|src| src.name == adapter.name()) {
+                        entry.last_ingest_at = Some(now_iso);
+                        entry.events_count =
+                            scalar_count_for_source(&pool, adapter.name()).await;
+                    }
+                    drop(s);
                     if inserted > 0 {
                         eprintln!(
-                            "[ingest] tail-appended {} events from {} file(s)",
+                            "[ingest:{}] tail-appended {} events from {} file(s)",
+                            adapter.name(),
                             inserted,
                             batch.len()
                         );
@@ -603,4 +575,21 @@ pub async fn run_watcher<R: Runtime>(
             }
         }
     }
+}
+
+/// Build the initial per-source status rows so the UI sees registered
+/// sources even before backfill completes.
+pub fn make_initial_source_status(
+    sources: &[sources::ResolvedAdapter],
+) -> Vec<SourceStatus> {
+    sources
+        .iter()
+        .map(|r| SourceStatus {
+            name: r.adapter.name().to_string(),
+            roots: r.paths.iter().map(|p| p.to_string_lossy().to_string()).collect(),
+            files_watched: 0,
+            events_count: 0,
+            last_ingest_at: None,
+        })
+        .collect()
 }

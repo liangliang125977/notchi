@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { formatModel } from "../lib/format";
-import type { PricingEntry, SettingsBundle } from "../lib/dataTypes";
+import type {
+  PricingEntry,
+  SettingsBundle,
+  SourceStatus,
+} from "../lib/dataTypes";
 
 const DEFAULT_MUTE_FROM = "22:00";
 const DEFAULT_MUTE_TO = "09:00";
@@ -14,6 +18,7 @@ interface Props {
 export function SettingsPanel({ highlightBudget }: Props) {
   const [bundle, setBundle] = useState<SettingsBundle | null>(null);
   const [pricing, setPricing] = useState<PricingEntry[]>([]);
+  const [sources, setSources] = useState<SourceStatus[]>([]);
   const [dirInput, setDirInput] = useState<string>("");
   const [budgetInput, setBudgetInput] = useState<string>("");
   const [muteFrom, setMuteFrom] = useState<string>(DEFAULT_MUTE_FROM);
@@ -29,12 +34,14 @@ export function SettingsPanel({ highlightBudget }: Props) {
 
   const reload = useCallback(async () => {
     try {
-      const [b, p] = await Promise.all([
+      const [b, p, src] = await Promise.all([
         invoke<SettingsBundle>("get_settings"),
         invoke<PricingEntry[]>("get_pricing_config"),
+        invoke<SourceStatus[]>("detected_sources"),
       ]);
       setBundle(b);
       setPricing(p);
+      setSources(src);
       setDirInput(b.claude_code_data_dir ?? "");
       setBudgetInput(
         b.monthly_budget_usd != null ? `${b.monthly_budget_usd}` : "",
@@ -225,6 +232,37 @@ export function SettingsPanel({ highlightBudget }: Props) {
             <code> ~/.claude/projects </code>folder above.
           </p>
         ) : null}
+      </Section>
+
+      <Section
+        title="Data sources"
+        hint="AI tools Notchi has detected on this Mac. Each runs its own watcher and dedupes against the same SQLite cache."
+      >
+        {sources.length === 0 ? (
+          <p className="sp-empty">
+            No data sources detected yet. Notchi auto-discovers Claude Code (
+            <code>~/.claude/projects</code>) and Codex CLI (
+            <code>~/.codex/sessions</code>) on launch.
+          </p>
+        ) : (
+          <ul className="sp-source-list">
+            {sources.map((s) => (
+              <li key={s.name} className="sp-source-row">
+                <span className="sp-source-name">
+                  {formatSourceName(s.name)}
+                </span>
+                <span className="sp-source-stat">
+                  {s.events_count.toLocaleString()} events
+                </span>
+                <span className="sp-source-stat">
+                  {s.last_ingest_at
+                    ? `ingested ${new Date(s.last_ingest_at).toLocaleTimeString()}`
+                    : "idle"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       <Section
@@ -433,6 +471,21 @@ function Section({
       <div className="sp-section-body">{children}</div>
     </section>
   );
+}
+
+function formatSourceName(name: string): string {
+  switch (name) {
+    case "claude-code":
+      return "Claude Code";
+    case "codex":
+      return "Codex CLI";
+    case "opencode":
+      return "OpenCode";
+    case "cursor":
+      return "Cursor";
+    default:
+      return name;
+  }
 }
 
 function PriceInput({

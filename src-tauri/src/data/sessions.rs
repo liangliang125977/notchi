@@ -19,6 +19,26 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+/// v1.0 — sessions are now keyed by `(source, session_id)` so two
+/// different tools can hold sessions with overlapping ids without
+/// trampling each other's tracker state. The on-wire shape (and the
+/// `events.session_id` column) keeps `session_id` flat; the source
+/// just selects the namespace.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct SessionKey {
+    pub source: String,
+    pub session_id: String,
+}
+
+impl SessionKey {
+    pub fn new(source: &str, session_id: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            session_id: session_id.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SessionState {
     /// First time we observed any row for this session.
@@ -46,11 +66,12 @@ pub struct SessionState {
 
 #[derive(Default)]
 pub struct SessionTracker {
-    inner: Mutex<HashMap<String, SessionState>>,
+    inner: Mutex<HashMap<SessionKey, SessionState>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CompletionEvent {
+    pub source: String,
     pub session_id: String,
     pub model: Option<String>,
     pub stop_reason: String,
@@ -60,6 +81,7 @@ pub struct CompletionEvent {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PendingInputEvent {
+    pub source: String,
     pub session_id: String,
     pub idle_secs: i64,
     /// 30 / 60 / 180 — the bracket this event was emitted for.
@@ -83,6 +105,7 @@ impl SessionTracker {
     /// for this stop_reason.
     pub fn observe_assistant(
         &self,
+        source: &str,
         session_id: &str,
         timestamp: Option<DateTime<Utc>>,
         model: Option<&str>,
@@ -90,7 +113,7 @@ impl SessionTracker {
         new_tokens: i64,
     ) -> ObserveResult {
         let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        let st = guard.entry(session_id.to_string()).or_default();
+        let st = guard.entry(SessionKey::new(source, session_id)).or_default();
         if st.started_at.is_none() {
             st.started_at = timestamp;
         }
@@ -128,6 +151,7 @@ impl SessionTracker {
         }
         st.completion_emitted = true;
         out.completed = Some(CompletionEvent {
+            source: source.to_string(),
             session_id: session_id.to_string(),
             model: st.last_model.clone(),
             stop_reason: reason.to_string(),
@@ -139,9 +163,9 @@ impl SessionTracker {
 
     /// Record a user turn. Resets pending-input emission flags so the
     /// next quiet stretch can fire fresh bubbles.
-    pub fn observe_user(&self, session_id: &str, timestamp: Option<DateTime<Utc>>) {
+    pub fn observe_user(&self, source: &str, session_id: &str, timestamp: Option<DateTime<Utc>>) {
         let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        let st = guard.entry(session_id.to_string()).or_default();
+        let st = guard.entry(SessionKey::new(source, session_id)).or_default();
         if st.started_at.is_none() {
             st.started_at = timestamp;
         }
@@ -162,12 +186,13 @@ impl SessionTracker {
     /// the silence has crossed 30 / 60 / 180 seconds.
     pub fn poll_pending_input(&self, now: DateTime<Utc>) -> Option<PendingInputEvent> {
         let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        // Iterate sorted by session_id for deterministic behaviour in
-        // tests; HashMap iteration order would otherwise vary.
-        let mut keys: Vec<String> = guard.keys().cloned().collect();
-        keys.sort();
-        for sid in keys {
-            let Some(st) = guard.get_mut(&sid) else {
+        // Iterate sorted by (source, session_id) for deterministic
+        // behaviour in tests; HashMap iteration order would otherwise vary.
+        let mut keys: Vec<SessionKey> = guard.keys().cloned().collect();
+        keys.sort_by(|a, b| (a.source.as_str(), a.session_id.as_str())
+            .cmp(&(b.source.as_str(), b.session_id.as_str())));
+        for key in keys {
+            let Some(st) = guard.get_mut(&key) else {
                 continue;
             };
             let Some(reason) = st.last_stop_reason.as_deref() else {
@@ -195,7 +220,8 @@ impl SessionTracker {
             if idle >= 180 && !st.pending_emitted_at_180s {
                 st.pending_emitted_at_180s = true;
                 return Some(PendingInputEvent {
-                    session_id: sid,
+                    source: key.source,
+                    session_id: key.session_id,
                     idle_secs: idle,
                     bracket: 180,
                 });
@@ -203,7 +229,8 @@ impl SessionTracker {
             if idle >= 60 && !st.pending_emitted_at_60s {
                 st.pending_emitted_at_60s = true;
                 return Some(PendingInputEvent {
-                    session_id: sid,
+                    source: key.source,
+                    session_id: key.session_id,
                     idle_secs: idle,
                     bracket: 60,
                 });
@@ -211,7 +238,8 @@ impl SessionTracker {
             if idle >= 30 && !st.pending_emitted_at_30s {
                 st.pending_emitted_at_30s = true;
                 return Some(PendingInputEvent {
-                    session_id: sid,
+                    source: key.source,
+                    session_id: key.session_id,
                     idle_secs: idle,
                     bracket: 30,
                 });

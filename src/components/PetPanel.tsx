@@ -166,6 +166,17 @@ export function PetPanel() {
     }
   }
 
+  async function handleForceEvolution(stage: 0 | 1 | 2) {
+    try {
+      // usePetStatus listens for this in dev/prod alike — we only
+      // expose the trigger from a dev-guarded section so reviewers
+      // can preview the burst without devtools / localStorage hacks.
+      await emit("pet:force-evolution-up", { stage });
+    } catch (err) {
+      console.error("[pet-panel] failed to emit force-evolution-up", err);
+    }
+  }
+
   const isDev = import.meta.env.DEV;
 
   const [sources, setSources] = useState<SourceStatus[]>([]);
@@ -314,6 +325,46 @@ export function PetPanel() {
                 onClick={() => void handleTestBubble("done")}
               >
                 Trigger done bubble + notification
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {isDev ? (
+        <section className="sp-section">
+          <header className="sp-section-head">
+            <h3>
+              Force evolution-up <span className="sp-tag">dev only</span>
+            </h3>
+            <p className="sp-section-hint">
+              Plays the v1.1 break-shell cinematic immediately. Picks the stage
+              you click and bumps the pet straight to it without waiting for the
+              token threshold.
+            </p>
+          </header>
+          <div className="sp-section-body">
+            <div className="sp-row">
+              <button
+                type="button"
+                className="sp-btn"
+                onClick={() => void handleForceEvolution(0)}
+              >
+                🥚 Egg
+              </button>
+              <button
+                type="button"
+                className="sp-btn"
+                onClick={() => void handleForceEvolution(1)}
+              >
+                🐣 Hatchling
+              </button>
+              <button
+                type="button"
+                className="sp-btn"
+                onClick={() => void handleForceEvolution(2)}
+              >
+                ✨ Adult
               </button>
             </div>
           </div>

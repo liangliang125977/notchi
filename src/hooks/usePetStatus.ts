@@ -105,6 +105,7 @@ export function usePetStatus() {
     void load();
     const t = window.setInterval(() => void load(), REFRESH_MS);
 
+    let unlistenForce: (() => void) | null = null;
     void (async () => {
       try {
         unlistenCompleted = await listen("pet:task-completed", () => {
@@ -115,12 +116,31 @@ export function usePetStatus() {
       } catch (e) {
         console.error("[pet-status] task-completed listen failed", e);
       }
+      try {
+        // Settings panel (dev only) emits this so reviewers without
+        // devtools access can preview the evolution-up cinematic
+        // without waiting for a real token threshold.
+        unlistenForce = await listen<{ stage: EvolutionStage }>(
+          "pet:force-evolution-up",
+          (event) => {
+            const stage = event.payload?.stage;
+            if (stage === 0 || stage === 1 || stage === 2) {
+              prevStageRef.current = stage;
+              writeLastStage(stage);
+              setEvolutionUp(stage);
+            }
+          },
+        );
+      } catch (e) {
+        console.error("[pet-status] force-evolution-up listen failed", e);
+      }
     })();
 
     return () => {
       cancelled = true;
       window.clearInterval(t);
       unlistenCompleted?.();
+      unlistenForce?.();
     };
   }, []);
 

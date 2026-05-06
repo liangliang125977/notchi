@@ -45,13 +45,17 @@ pub struct TokenSummary {
 
 pub async fn token_summary(pool: &SqlitePool, period: Period) -> Result<TokenSummary, sqlx::Error> {
     let lb = period.lower_bound_sql();
+    // SQLite literal `0` is INTEGER. When SUM(...) is NULL (no rows
+    // in window), COALESCE collapses to INTEGER and sqlx rejects the
+    // f64 destination at decode time. Use `0.0` for REAL columns so
+    // the COALESCE result is always REAL.
     let sql = format!(
         "SELECT
             COALESCE(SUM(input_tokens),0) AS i,
             COALESCE(SUM(output_tokens),0) AS o,
             COALESCE(SUM(cache_read_input_tokens),0) AS cr,
             COALESCE(SUM(cache_creation_input_tokens),0) AS cc,
-            COALESCE(SUM(CAST(cost_usd AS REAL)),0) AS cost,
+            COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost,
             COUNT(DISTINCT session_id) AS sessions
          FROM events WHERE timestamp >= {lb}"
     );
@@ -97,7 +101,7 @@ pub async fn token_timeseries(
     let sql = format!(
         "SELECT {bucket_expr} AS bucket,
                 COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
-                COALESCE(SUM(CAST(cost_usd AS REAL)),0) AS cost
+                COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost
          FROM events
          WHERE timestamp >= {lb}
          GROUP BY bucket ORDER BY bucket ASC"
@@ -166,7 +170,7 @@ pub async fn recent_sessions(pool: &SqlitePool, limit: i64) -> Result<Vec<Sessio
     let sql = "SELECT session_id,
                        MIN(timestamp) AS started_at,
                        COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
-                       COALESCE(SUM(CAST(cost_usd AS REAL)),0) AS cost,
+                       COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost,
                        (SELECT model FROM events e2 WHERE e2.session_id = e1.session_id
                         GROUP BY model ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS model,
                        (SELECT project_path FROM events e3 WHERE e3.session_id = e1.session_id

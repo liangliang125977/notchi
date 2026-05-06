@@ -6,13 +6,16 @@ import { usePetStore, type PetSize } from "../stores/petStore";
 import {
   PET_ACTIONS,
   PET_FORCE_FALLBACK_EVENT,
+  PET_MODEL_CHANGED_EVENT,
   PET_RENDER_MODE_EVENT,
   PET_SET_ACTION_EVENT,
+  SELECTED_MODEL_KEY,
   type PetAction,
   type PetRenderMode,
   type PetRenderModePayload,
   type PetSetActionPayload,
 } from "../stores/petStore";
+import { PET_MODELS, DEFAULT_MODEL_ID } from "../lib/petModels";
 import type { SourceStatus } from "../lib/dataTypes";
 
 type NotchMode = "auto" | "force-notch" | "force-no-notch";
@@ -56,6 +59,7 @@ export function PetPanel() {
   const [renderMode, setRenderMode] = useState<PetRenderMode>("live2d");
   const [screens, setScreens] = useState<ScreenInfo[]>([]);
   const [targetScreen, setTargetScreen] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,11 +72,13 @@ export function PetPanel() {
         const stored = await s.get<NotchMode>(NOTCH_MODE_KEY);
         const storedTarget = await s.get<string | null>(TARGET_SCREEN_ID_KEY);
         const storedSize = await s.get<PetSize>(PET_SIZE_KEY);
+        const storedModel = await s.get<string>(SELECTED_MODEL_KEY);
         if (cancelled) return;
         setStore(s);
         setMode(stored ?? DEFAULT_MODE);
         setTargetScreen(storedTarget ?? null);
         if (storedSize) setPetSizeStore(storedSize);
+        if (storedModel) setSelectedModel(storedModel);
         setReady(true);
       } catch (err) {
         console.error("[pet-panel] failed to load store", err);
@@ -146,6 +152,18 @@ export function PetPanel() {
       await emit(PET_SET_ACTION_EVENT, payload);
     } catch (err) {
       console.error("[pet-panel] failed to emit pet action", err);
+    }
+  }
+
+  async function handleModelChange(modelId: string) {
+    setSelectedModel(modelId);
+    if (store) {
+      await store.set(SELECTED_MODEL_KEY, modelId);
+    }
+    try {
+      await emit(PET_MODEL_CHANGED_EVENT, { modelId });
+    } catch (err) {
+      console.error("[pet-panel] failed to emit model change", err);
     }
   }
 
@@ -248,6 +266,31 @@ export function PetPanel() {
             >
               Small
             </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="sp-section">
+        <header className="sp-section-head">
+          <h3>宠物角色</h3>
+          <p className="sp-section-hint">
+            切换立即生效。所有模型均来自 Live2D 官方免费素材。
+          </p>
+        </header>
+        <div className="sp-section-body">
+          <div className="sp-action-row" style={{ flexWrap: "wrap", gap: "8px" }}>
+            {PET_MODELS.map((model) => (
+              <button
+                key={model.id}
+                type="button"
+                className={"sp-chip" + (selectedModel === model.id ? " is-active" : "")}
+                disabled={!ready}
+                onClick={() => void handleModelChange(model.id)}
+                title={model.description}
+              >
+                {model.name}
+              </button>
+            ))}
           </div>
         </div>
       </section>

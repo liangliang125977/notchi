@@ -16,7 +16,8 @@ import { useColorTone } from "./hooks/useColorTone";
 import { usePetHoverExpand } from "./hooks/usePetHoverExpand";
 import { useEmotionEngine } from "./hooks/useEmotionEngine";
 import { usePetStatus, type EvolutionStage } from "./hooks/usePetStatus";
-import { usePetStore, PET_SIZE_SMALL, type PetSize } from "./stores/petStore";
+import { usePetStore, PET_SIZE_SMALL, PET_MODEL_CHANGED_EVENT, SELECTED_MODEL_KEY, type PetSize } from "./stores/petStore";
+import { getModelById } from "./lib/petModels";
 
 const STAGE_BUBBLE: Record<EvolutionStage, string> = {
   0: "孵化中…🥚",
@@ -46,23 +47,30 @@ function App() {
   const renderMode = usePetStore((s) => s.renderMode);
   const petSize = usePetStore((s) => s.petSize);
   const setPetSize = usePetStore((s) => s.setPetSize);
+  const selectedModelId = usePetStore((s) => s.selectedModelId);
+  const setSelectedModel = usePetStore((s) => s.setSelectedModel);
   const petDim = petSize === "small" ? PET_SIZE_SMALL : 240;
+  const currentModel = getModelById(selectedModelId);
 
-  // Read initial size from settings.json and listen for live changes
-  // from the Settings webview (two separate JS contexts — no shared store).
+  // Read initial settings from settings.json on mount.
+  // The two webviews have isolated JS contexts, so we read from the store file directly.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const store = await load("settings.json", { defaults: {}, autoSave: false });
-        const stored = await store.get<PetSize>("petSize");
-        if (!cancelled && stored) setPetSize(stored);
+        const storedSize = await store.get<PetSize>("petSize");
+        const storedModel = await store.get<string>(SELECTED_MODEL_KEY);
+        if (!cancelled) {
+          if (storedSize) setPetSize(storedSize);
+          if (storedModel) setSelectedModel(storedModel);
+        }
       } catch {
-        // settings.json not yet created — default "large" is fine
+        // settings.json not yet created — defaults are fine
       }
     })();
     return () => { cancelled = true; };
-  }, [setPetSize]);
+  }, [setPetSize, setSelectedModel]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -71,6 +79,14 @@ function App() {
     }).then((fn) => { unlisten = fn; });
     return () => unlisten?.();
   }, [setPetSize]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<{ modelId: string }>(PET_MODEL_CHANGED_EVENT, (e) => {
+      setSelectedModel(e.payload.modelId);
+    }).then((fn) => { unlisten = fn; });
+    return () => unlisten?.();
+  }, [setSelectedModel]);
 
   // Drag is wired to the pet slot so the expanded capsule never gets
   // dragged with it (SPEC §4 S8 + S15 — fallback must keep all
@@ -116,7 +132,7 @@ function App() {
         }}
       >
         {renderMode === "live2d"
-          ? <PetCanvas key={petSize} size={petDim} />
+          ? <PetCanvas key={`${petSize}-${selectedModelId}`} size={petDim} modelUrl={currentModel.modelPath} actionMotions={currentModel.actionMotions} />
           : <PetFallbackImage size={petDim} />}
       </div>
       <L2Capsule visible={expanded} />

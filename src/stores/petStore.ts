@@ -17,6 +17,8 @@ export const PET_ACTIONS: readonly PetAction[] = [
 ] as const;
 
 export const PET_SET_ACTION_EVENT = "pet:set-action";
+export const PET_MODEL_CHANGED_EVENT = "pet:model-changed";
+export const SELECTED_MODEL_KEY = "selectedModel";
 
 // SPEC §4 S15 dev-only path: settings emits this so the pet window
 // can flip into the static-PNG fallback render mode without us
@@ -54,12 +56,14 @@ interface PetState {
   muteWindowStart: string | null;
   muteWindowEnd: string | null;
   petSize: PetSize;
+  selectedModelId: string;
   setRenderMode: (mode: PetRenderMode) => void;
   setAction: (action: PetAction) => void;
   setMuteWindow: (start: string | null, end: string | null) => void;
   showBubble: (text: string, durationMs?: number) => void;
   hideBubble: () => void;
   setPetSize: (size: PetSize) => void;
+  setSelectedModel: (id: string) => void;
 }
 
 const DEFAULT_BUBBLE_MS = 3500;
@@ -103,11 +107,13 @@ export const usePetStore = create<PetState>((set, get) => ({
   muteWindowStart: null,
   muteWindowEnd: null,
   petSize: "large",
+  selectedModelId: "mao",
   setRenderMode: (mode) => set({ renderMode: mode }),
   setAction: (action) => set({ currentAction: action }),
   setMuteWindow: (start, end) =>
     set({ muteWindowStart: start, muteWindowEnd: end }),
   setPetSize: (size) => set({ petSize: size }),
+  setSelectedModel: (id) => set({ selectedModelId: id }),
   showBubble: (text, durationMs = DEFAULT_BUBBLE_MS) => {
     const { muteWindowStart, muteWindowEnd } = get();
     if (isMuted(muteWindowStart, muteWindowEnd)) return;

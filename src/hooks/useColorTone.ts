@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { SettingsBundle, TokenSummary } from "../lib/dataTypes";
+
+// v1.3 hardening — the settings window emits this after saving a
+// new monthly budget so the pet window can refresh its tone filter
+// without waiting up to 60 s for the next poll.
+const BUDGET_CHANGED_EVENT = "settings:budget-changed";
 
 // SPEC §4 S3 + §5.2 — pet color reflects monthly spend / monthly
 // budget. We poll the cheap aggregate every minute (IPC + a single
@@ -50,9 +56,21 @@ export function useColorTone(): ToneState {
     void tick();
     timer = window.setInterval(() => void tick(), REFRESH_MS);
 
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      try {
+        unlisten = await listen(BUDGET_CHANGED_EVENT, () => {
+          void tick();
+        });
+      } catch (err) {
+        console.error("[useColorTone] budget-changed listen failed", err);
+      }
+    })();
+
     return () => {
       cancelled = true;
       if (timer !== null) window.clearInterval(timer);
+      unlisten?.();
     };
   }, []);
 

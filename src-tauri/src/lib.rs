@@ -75,6 +75,26 @@ fn pet_main_screen_id() -> Option<String> {
     }
 }
 
+/// v1.3 hardening — settings banner deep-links here when macOS
+/// notification permission has been declined. Opens System Settings →
+/// Notifications so the user can re-grant without hunting through
+/// nested panes. No-op on non-macOS.
+#[tauri::command]
+fn open_macos_notifications_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.notifications")
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -86,6 +106,7 @@ pub fn run() {
             greet,
             pet_default_target_position,
             pet_main_screen_id,
+            open_macos_notifications_settings,
             data::commands::token_summary,
             data::commands::token_timeseries,
             data::commands::token_by_source,

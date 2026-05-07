@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    coding_pet_lib::run()
+    notchi_lib::run()
 }

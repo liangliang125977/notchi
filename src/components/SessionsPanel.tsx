@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Period, SessionRow } from "../lib/dataTypes";
 import {
-  formatCost,
   formatModel,
   formatTimeHM,
   formatTokens,
@@ -125,7 +124,6 @@ function SessionTable({ rows }: { rows: SessionRow[] }) {
           <th>Project</th>
           <th>Model</th>
           <th className="sx-num">Tokens</th>
-          <th className="sx-num">Cost</th>
           <th>Source</th>
         </tr>
       </thead>
@@ -170,12 +168,11 @@ function SessionRowView({
         </td>
         <td className="sx-td-model">{formatModel(row.model)}</td>
         <td className="sx-num">{formatTokens(row.total_tokens)}</td>
-        <td className="sx-num">{formatCost(row.cost_usd)}</td>
         <td className="sx-td-source">{row.source}</td>
       </tr>
       {expanded ? (
         <tr className="sx-row-detail">
-          <td colSpan={6}>
+          <td colSpan={5}>
             <dl className="sx-detail">
               <div>
                 <dt>Session ID</dt>

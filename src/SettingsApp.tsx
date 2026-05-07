@@ -32,7 +32,6 @@ interface OpenTabPayload {
 
 function SettingsApp() {
   const [active, setActive] = useState<string>("overview");
-  const [highlightBudget, setHighlightBudget] = useState(false);
   const [notifDenied, setNotifDenied] = useState(false);
 
   useEffect(() => {
@@ -45,10 +44,7 @@ function SettingsApp() {
             const next = event.payload?.tab;
             if (typeof next === "string") {
               const allowed = TABS.find((t) => t.id === next && !t.disabled);
-              if (allowed) {
-                setActive(next);
-                if (next === "settings") setHighlightBudget(true);
-              }
+              if (allowed) setActive(next);
             }
           },
         );
@@ -76,15 +72,6 @@ function SettingsApp() {
       unlisten?.();
     };
   }, []);
-
-  // Reset the highlight flag once the user moves away from settings.
-  // Wrapped in a microtask so the lint rule doesn't see a synchronous
-  // setState call from inside the effect body.
-  useEffect(() => {
-    if (active === "settings" || !highlightBudget) return;
-    const id = window.setTimeout(() => setHighlightBudget(false), 0);
-    return () => window.clearTimeout(id);
-  }, [active, highlightBudget]);
 
   return (
     <main className="settings-window">
@@ -124,12 +111,7 @@ function SettingsApp() {
 
       <div className="settings-window-body">
         <TabPanel id="overview" active={active}>
-          <OverviewPanel
-            onJumpToBudget={() => {
-              setActive("settings");
-              setHighlightBudget(true);
-            }}
-          />
+          <OverviewPanel />
         </TabPanel>
         <TabPanel id="sessions" active={active}>
           <SessionsPanel />
@@ -138,7 +120,7 @@ function SettingsApp() {
           <PetPanel />
         </TabPanel>
         <TabPanel id="settings" active={active}>
-          <SettingsPanel highlightBudget={highlightBudget} />
+          <SettingsPanel />
         </TabPanel>
       </div>
     </main>

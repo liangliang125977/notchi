@@ -5,13 +5,11 @@ import type {
   GroupRow,
   Period,
   SessionRow,
-  SettingsBundle,
   TimeseriesPoint,
   TokenSummary,
 } from "../lib/dataTypes";
 import { GrowthSection } from "./GrowthSection";
 import {
-  formatCost,
   formatModel,
   formatPercentDelta,
   formatTimeHM,
@@ -30,7 +28,6 @@ interface OverviewState {
   bySource: GroupRow[];
   byModel: GroupRow[];
   recent: SessionRow[];
-  settings: SettingsBundle | null;
   loading: boolean;
   err: string | null;
 }
@@ -42,7 +39,6 @@ const EMPTY: OverviewState = {
   bySource: [],
   byModel: [],
   recent: [],
-  settings: null,
   loading: true,
   err: null,
 };
@@ -61,11 +57,7 @@ const PERIOD_DIST_TITLE: Record<Period, string> = {
   month: "Daily distribution (30d)",
 };
 
-interface Props {
-  onJumpToBudget: () => void;
-}
-
-export function OverviewPanel({ onJumpToBudget }: Props) {
+export function OverviewPanel() {
   const [period, setPeriod] = useState<Period>("today");
   const [s, setS] = useState<OverviewState>(EMPTY);
 
@@ -79,23 +71,15 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
       // call hits the local SQLite pool.
       setS((prev) => ({ ...prev, loading: true }));
       try {
-        const [
-          summary,
-          series,
-          weekSeries,
-          bySource,
-          byModel,
-          recent,
-          settings,
-        ] = await Promise.all([
-          invoke<TokenSummary>("token_summary", { period }),
-          invoke<TimeseriesPoint[]>("token_timeseries", { period }),
-          invoke<TimeseriesPoint[]>("token_timeseries", { period: "week" }),
-          invoke<GroupRow[]>("token_by_source", { period }),
-          invoke<GroupRow[]>("token_by_model", { period }),
-          invoke<SessionRow[]>("recent_sessions", { limit: 5 }),
-          invoke<SettingsBundle>("get_settings"),
-        ]);
+        const [summary, series, weekSeries, bySource, byModel, recent] =
+          await Promise.all([
+            invoke<TokenSummary>("token_summary", { period }),
+            invoke<TimeseriesPoint[]>("token_timeseries", { period }),
+            invoke<TimeseriesPoint[]>("token_timeseries", { period: "week" }),
+            invoke<GroupRow[]>("token_by_source", { period }),
+            invoke<GroupRow[]>("token_by_model", { period }),
+            invoke<SessionRow[]>("recent_sessions", { limit: 5 }),
+          ]);
         if (cancelled) return;
         setS({
           summary,
@@ -104,7 +88,6 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
           bySource,
           byModel,
           recent,
-          settings,
           loading: false,
           err: null,
         });
@@ -129,29 +112,6 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
     return s.weekSeries.find((p) => p.bucket === key) ?? null;
   }, [s.weekSeries]);
 
-  // Month spend for budget bar (separate IPC, refreshed on load).
-  const [monthCost, setMonthCost] = useState<number>(0);
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const month = await invoke<TokenSummary>("token_summary", {
-          period: "month",
-        });
-        if (cancelled) return;
-        setMonthCost(Number.parseFloat(month.total_cost_usd) || 0);
-      } catch (err) {
-        console.error("[overview] month summary failed", err);
-      }
-    };
-    void load();
-    const t = window.setInterval(() => void load(), REFRESH_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(t);
-    };
-  }, []);
-
   if (s.err) {
     return (
       <section className="ov-error">
@@ -162,16 +122,10 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
 
   const totalTokens =
     s.summary != null ? s.summary.total_input + s.summary.total_output : 0;
-  const totalCost = s.summary ? Number.parseFloat(s.summary.total_cost_usd) : 0;
-  // Day-over-day delta only makes sense for the Today period; for
-  // Week/Month we hide the chip to avoid implying a comparison we
-  // didn't actually compute.
+  // Day-over-day delta only makes sense for the Today period.
   const yTokens = yesterday?.tokens ?? 0;
-  const yCost = yesterday ? Number.parseFloat(yesterday.cost_usd) : 0;
   const tokenDelta =
     period === "today" ? percentChange(totalTokens, yTokens) : undefined;
-  const costDelta =
-    period === "today" ? percentChange(totalCost, yCost) : undefined;
   const eyebrow =
     period === "today"
       ? "Today"
@@ -195,7 +149,6 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
           value={formatTokens(totalTokens)}
           delta={tokenDelta}
         />
-        <Card label="Cost" value={formatCost(totalCost)} delta={costDelta} />
         <Card
           label="Sessions"
           value={s.summary ? `${s.summary.session_count}` : "—"}
@@ -241,26 +194,13 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
           <header className="ov-section-head">
             <h3>By model</h3>
           </header>
-          <BarList rows={s.byModel} period={period} formatKey={(k) => formatModel(k)} />
+          <BarList
+            rows={s.byModel}
+            period={period}
+            formatKey={(k) => formatModel(k)}
+          />
         </section>
       </div>
-
-      <section className="ov-section">
-        <header className="ov-section-head">
-          <h3>Monthly budget</h3>
-          <button
-            type="button"
-            className="ov-link-btn"
-            onClick={onJumpToBudget}
-          >
-            Edit
-          </button>
-        </header>
-        <BudgetBar
-          spentUsd={monthCost}
-          budgetUsd={s.settings?.monthly_budget_usd ?? null}
-        />
-      </section>
 
       <section className="ov-section">
         <header className="ov-section-head">
@@ -435,38 +375,6 @@ function BarList({
   );
 }
 
-function BudgetBar({
-  spentUsd,
-  budgetUsd,
-}: {
-  spentUsd: number;
-  budgetUsd: number | null;
-}) {
-  if (!budgetUsd || budgetUsd <= 0) {
-    return (
-      <p className="ov-empty">
-        Set a monthly budget to track spend visually on the pet.
-      </p>
-    );
-  }
-  const pct = Math.min(1.5, spentUsd / budgetUsd); // allow 150% overspend
-  const tone =
-    pct < 0.5 ? "ok" : pct < 0.8 ? "warn" : pct < 1.0 ? "hot" : "over";
-  return (
-    <div className={"ov-budget tone-" + tone}>
-      <div className="ov-budget-track" aria-hidden="true">
-        <div
-          className="ov-budget-fill"
-          style={{ width: `${Math.min(100, pct * 100)}%` }}
-        />
-      </div>
-      <span className="ov-budget-text">
-        {formatCost(spentUsd)} / {formatCost(budgetUsd)}
-      </span>
-    </div>
-  );
-}
-
 function RecentSessions({ rows }: { rows: SessionRow[] }) {
   if (rows.length === 0) {
     return <p className="ov-empty">No recent sessions.</p>;
@@ -481,7 +389,6 @@ function RecentSessions({ rows }: { rows: SessionRow[] }) {
               {shortProjectPath(r.project_path)}
             </td>
             <td className="ov-td-tokens">{formatTokens(r.total_tokens)}</td>
-            <td className="ov-td-cost">{formatCost(r.cost_usd)}</td>
             <td className="ov-td-model">{formatModel(r.model)}</td>
           </tr>
         ))}

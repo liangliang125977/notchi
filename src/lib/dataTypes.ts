@@ -52,26 +52,15 @@ export type SessionRow = {
   source: string;
 };
 
-export type PricingEntry = {
-  model: string;
-  endpoint_id: string;
-  input_per_mtok: string;
-  output_per_mtok: string;
-  cache_read_per_mtok: string;
-  cache_write_per_mtok: string;
-};
-
 export type SettingsBundle = {
   claude_code_data_dir: string | null;
   claude_code_found: boolean;
   mute_window_start: string | null;
   mute_window_end: string | null;
-  monthly_budget_usd: number | null;
   events_count: number;
 };
 
 export type SettingsPatch = {
-  monthly_budget_usd?: number | null;
   mute_window_start?: string | null;
   mute_window_end?: string | null;
 };

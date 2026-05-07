@@ -10,13 +10,6 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(abs < 10_000_000 ? 2 : 1)}M`;
 }
 
-export function formatCost(usdString: string | number): string {
-  const n =
-    typeof usdString === "string" ? Number.parseFloat(usdString) : usdString;
-  if (!Number.isFinite(n)) return "$0.00";
-  return `$${n.toFixed(2)}`;
-}
-
 export function formatModel(model: string | null | undefined): string {
   if (!model) return "—";
   let m = model;

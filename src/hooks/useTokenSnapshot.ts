@@ -19,7 +19,6 @@ export interface TokenSnapshot {
   recentActive: boolean;
   recentRelativeIso: string | null;
   yesterdayTokens: number | null;
-  yesterdayCost: number | null;
   loading: boolean;
 }
 
@@ -33,7 +32,6 @@ export function useTokenSnapshot(active: boolean): TokenSnapshot {
     recentActive: false,
     recentRelativeIso: null,
     yesterdayTokens: null,
-    yesterdayCost: null,
     loading: false,
   });
 
@@ -83,7 +81,6 @@ export function useTokenSnapshot(active: boolean): TokenSnapshot {
           recentActive,
           recentRelativeIso,
           yesterdayTokens: yRow ? yRow.tokens : 0,
-          yesterdayCost: yRow ? Number.parseFloat(yRow.cost_usd) : 0,
           loading: false,
         });
       } catch (err) {

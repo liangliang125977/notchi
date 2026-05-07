@@ -12,12 +12,14 @@ import { GrowthSection } from "./GrowthSection";
 import {
   formatModel,
   formatPercentDelta,
+  formatSource,
   formatTimeHM,
   formatTokens,
   percentChange,
   shortProjectPath,
   todayDateLabel,
 } from "../lib/format";
+import { useT } from "../hooks/useT";
 
 interface OverviewState {
   summary: TokenSummary | null;
@@ -27,6 +29,7 @@ interface OverviewState {
   series: TimeseriesPoint[];
   bySource: GroupRow[];
   byModel: GroupRow[];
+  byProject: GroupRow[];
   recent: SessionRow[];
   loading: boolean;
   err: string | null;
@@ -38,6 +41,7 @@ const EMPTY: OverviewState = {
   series: [],
   bySource: [],
   byModel: [],
+  byProject: [],
   recent: [],
   loading: true,
   err: null,
@@ -45,19 +49,28 @@ const EMPTY: OverviewState = {
 
 const REFRESH_MS = 60_000;
 
-const PERIOD_OPTIONS: ReadonlyArray<{ id: Period; label: string }> = [
-  { id: "today", label: "Today" },
-  { id: "week", label: "Week" },
-  { id: "month", label: "Month" },
-];
-
-const PERIOD_DIST_TITLE: Record<Period, string> = {
-  today: "Hourly distribution",
-  week: "Daily distribution (7d)",
-  month: "Daily distribution (30d)",
-};
 
 export function OverviewPanel() {
+  const t = useT();
+
+  const PERIOD_OPTIONS: ReadonlyArray<{ id: Period; label: string }> = [
+    { id: "today", label: t.period.today },
+    { id: "week", label: t.period.week },
+    { id: "month", label: t.period.month },
+  ];
+
+  const PERIOD_DIST_TITLE: Record<Period, string> = {
+    today: t.overview.hourly,
+    week: t.overview.daily7,
+    month: t.overview.daily30,
+  };
+
+  const PERIOD_EMPTY: Record<Period, string> = {
+    today: t.overview.noDataToday,
+    week: t.overview.noDataWeek,
+    month: t.overview.noDataMonth,
+  };
+
   const [period, setPeriod] = useState<Period>("today");
   const [s, setS] = useState<OverviewState>(EMPTY);
 
@@ -71,13 +84,14 @@ export function OverviewPanel() {
       // call hits the local SQLite pool.
       setS((prev) => ({ ...prev, loading: true }));
       try {
-        const [summary, series, weekSeries, bySource, byModel, recent] =
+        const [summary, series, weekSeries, bySource, byModel, byProject, recent] =
           await Promise.all([
             invoke<TokenSummary>("token_summary", { period }),
             invoke<TimeseriesPoint[]>("token_timeseries", { period }),
             invoke<TimeseriesPoint[]>("token_timeseries", { period: "week" }),
             invoke<GroupRow[]>("token_by_source", { period }),
             invoke<GroupRow[]>("token_by_model", { period }),
+            invoke<GroupRow[]>("token_by_project", { period }),
             invoke<SessionRow[]>("recent_sessions", { limit: 5 }),
           ]);
         if (cancelled) return;
@@ -87,6 +101,7 @@ export function OverviewPanel() {
           series,
           bySource,
           byModel,
+          byProject,
           recent,
           loading: false,
           err: null,
@@ -115,7 +130,7 @@ export function OverviewPanel() {
   if (s.err) {
     return (
       <section className="ov-error">
-        <p>Failed to load overview: {s.err}</p>
+        <p>{t.overview.failedToLoad(s.err)}</p>
       </section>
     );
   }
@@ -128,10 +143,13 @@ export function OverviewPanel() {
     period === "today" ? percentChange(totalTokens, yTokens) : undefined;
   const eyebrow =
     period === "today"
-      ? "Today"
+      ? t.overview.today
       : period === "week"
-        ? "Last 7 days"
-        : "This month";
+        ? t.overview.week
+        : t.overview.month;
+
+  const cacheRead = s.summary?.total_cache_read ?? 0;
+  const cacheWrite = s.summary?.total_cache_creation ?? 0;
 
   return (
     <div className="ov-root">
@@ -145,16 +163,24 @@ export function OverviewPanel() {
 
       <div className="ov-cards">
         <Card
-          label="Tokens"
+          label={t.overview.tokens}
           value={formatTokens(totalTokens)}
           delta={tokenDelta}
+          sub={
+            cacheRead > 0 || cacheWrite > 0
+              ? [
+                  { label: t.overview.cacheRead, value: formatTokens(cacheRead) },
+                  { label: t.overview.cacheWrite, value: formatTokens(cacheWrite) },
+                ]
+              : undefined
+          }
         />
         <Card
-          label="Sessions"
+          label={t.overview.sessions}
           value={s.summary ? `${s.summary.session_count}` : "—"}
         />
         <Card
-          label="Top model"
+          label={t.overview.topModel}
           value={formatModel(s.summary?.dominant_model ?? null)}
           mono={false}
         />
@@ -186,28 +212,46 @@ export function OverviewPanel() {
       <div className="ov-grid-2">
         <section className="ov-section">
           <header className="ov-section-head">
-            <h3>By tool</h3>
+            <h3>{t.overview.byTool}</h3>
           </header>
-          <BarList rows={s.bySource} period={period} formatKey={(k) => k} />
+          <BarList
+            rows={s.bySource}
+            period={period}
+            formatKey={(k) => formatSource(k)}
+            emptyText={PERIOD_EMPTY[period]}
+          />
         </section>
         <section className="ov-section">
           <header className="ov-section-head">
-            <h3>By model</h3>
+            <h3>{t.overview.byModel}</h3>
           </header>
           <BarList
             rows={s.byModel}
             period={period}
             formatKey={(k) => formatModel(k)}
+            emptyText={PERIOD_EMPTY[period]}
           />
         </section>
       </div>
 
       <section className="ov-section">
         <header className="ov-section-head">
-          <h3>Recent sessions</h3>
-          <span className="ov-section-aside">Last {s.recent.length}</span>
+          <h3>{t.overview.byProject}</h3>
         </header>
-        <RecentSessions rows={s.recent} />
+        <BarList
+          rows={s.byProject}
+          period={period}
+          formatKey={(k) => shortProjectPath(k)}
+          emptyText={PERIOD_EMPTY[period]}
+        />
+      </section>
+
+      <section className="ov-section">
+        <header className="ov-section-head">
+          <h3>{t.overview.recentSessions}</h3>
+          <span className="ov-section-aside">{t.overview.last(s.recent.length)}</span>
+        </header>
+        <RecentSessions rows={s.recent} t={t} />
       </section>
 
       <GrowthSection />
@@ -220,11 +264,13 @@ function Card({
   value,
   delta,
   mono = true,
+  sub,
 }: {
   label: string;
   value: string;
   delta?: number | null;
   mono?: boolean;
+  sub?: { label: string; value: string }[];
 }) {
   return (
     <div className="ov-card">
@@ -247,6 +293,16 @@ function Card({
         >
           {formatPercentDelta(delta ?? null)}
         </span>
+      ) : null}
+      {sub && sub.length > 0 ? (
+        <div className="ov-card-sub">
+          {sub.map((item) => (
+            <span key={item.label} className="ov-card-sub-row">
+              <span className="ov-card-sub-label">{item.label}</span>
+              <span className="ov-card-sub-value">{item.value}</span>
+            </span>
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -340,23 +396,18 @@ function DistributionChart({
   );
 }
 
-const PERIOD_EMPTY: Record<Period, string> = {
-  today: "No data yet today.",
-  week: "No data this week.",
-  month: "No data this month.",
-};
-
 function BarList({
   rows,
-  period,
   formatKey,
+  emptyText,
 }: {
   rows: GroupRow[];
   period: Period;
   formatKey: (k: string) => string;
+  emptyText: string;
 }) {
   if (rows.length === 0) {
-    return <p className="ov-empty">{PERIOD_EMPTY[period]}</p>;
+    return <p className="ov-empty">{emptyText}</p>;
   }
   return (
     <ul className="ov-bars">
@@ -375,12 +426,26 @@ function BarList({
   );
 }
 
-function RecentSessions({ rows }: { rows: SessionRow[] }) {
+function RecentSessions({
+  rows,
+  t,
+}: {
+  rows: SessionRow[];
+  t: ReturnType<typeof useT>;
+}) {
   if (rows.length === 0) {
     return <p className="ov-empty">No recent sessions.</p>;
   }
   return (
     <table className="ov-table">
+      <thead>
+        <tr>
+          <th className="ov-th">{t.overview.colTime}</th>
+          <th className="ov-th">{t.overview.colProject}</th>
+          <th className="ov-th ov-td-tokens">{t.overview.colTokens}</th>
+          <th className="ov-th">{t.overview.colModel}</th>
+        </tr>
+      </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.session_id}>

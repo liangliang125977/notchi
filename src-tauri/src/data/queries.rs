@@ -137,6 +137,27 @@ pub async fn token_by_model(pool: &SqlitePool, period: Period) -> Result<Vec<Gro
     group_by(pool, period, "model").await
 }
 
+pub async fn token_by_project(pool: &SqlitePool, period: Period) -> Result<Vec<GroupRow>, sqlx::Error> {
+    let lb = period.lower_bound_sql();
+    // Use COALESCE to bucket NULL project_path as "(unknown)".
+    let sql = format!(
+        "SELECT COALESCE(project_path, '(unknown)') AS key,
+                COALESCE(SUM(input_tokens + output_tokens),0) AS tokens
+         FROM events WHERE timestamp >= {lb}
+         GROUP BY project_path ORDER BY tokens DESC"
+    );
+    let rows: Vec<(String, i64)> = sqlx::query_as(&sql).fetch_all(pool).await?;
+    let total: i64 = rows.iter().map(|(_, t)| *t).sum();
+    Ok(rows
+        .into_iter()
+        .map(|(k, t)| GroupRow {
+            key: k,
+            tokens: t,
+            percentage: if total > 0 { (t as f64) * 100.0 / (total as f64) } else { 0.0 },
+        })
+        .collect())
+}
+
 async fn group_by(
     pool: &SqlitePool,
     period: Period,

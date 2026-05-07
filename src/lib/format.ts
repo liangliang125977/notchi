@@ -121,3 +121,16 @@ export function todayDateLabel(): string {
   const d = new Date();
   return d.toISOString().slice(0, 10);
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  codex: "Codex",
+  cursor: "Cursor",
+  opencode: "OpenCode",
+};
+
+export function formatSource(s: string | null | undefined): string {
+  if (!s) return "—";
+  return SOURCE_LABELS[s.toLowerCase()] ?? s;
+}

@@ -226,6 +226,31 @@ body {
   color: var(--sp-muted);
 }
 
+.ov-card-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 0.5px solid var(--sp-divider);
+}
+
+.ov-card-sub-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.ov-card-sub-label {
+  color: var(--sp-muted);
+}
+
+.ov-card-sub-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--sp-card-fg);
+  font-weight: 500;
+}
+
 .ov-section {
   background: var(--sp-card-bg);
   border: 0.5px solid var(--sp-card-border);
@@ -579,6 +604,21 @@ body {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+
+.ov-th {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--sp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 0 4px 6px;
+  border-bottom: 0.5px solid var(--sp-divider);
+  text-align: left;
+}
+
+.ov-th.ov-td-tokens {
+  text-align: right;
 }
 
 .ov-table tr + tr td {

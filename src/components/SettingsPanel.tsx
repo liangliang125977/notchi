@@ -2,11 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import type { SettingsBundle, SourceStatus } from "../lib/dataTypes";
+import { useT } from "../hooks/useT";
+import { useLangStore } from "../stores/langStore";
+import type { Locale } from "../lib/locales";
 
 const DEFAULT_MUTE_FROM = "22:00";
 const DEFAULT_MUTE_TO = "09:00";
 
 export function SettingsPanel() {
+  const t = useT();
+  const locale = useLangStore((s) => s.locale);
+  const setLocale = useLangStore((s) => s.setLocale);
+
   const [bundle, setBundle] = useState<SettingsBundle | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [dirInput, setDirInput] = useState<string>("");
@@ -57,7 +64,7 @@ export function SettingsPanel() {
     try {
       await invoke("set_claude_code_data_dir", { path: dirInput.trim() });
       await reload();
-      flash("Data folder updated.");
+      flash(t.settings.dataFolderUpdated);
     } catch (err) {
       setDirErr(String(err));
     } finally {
@@ -73,13 +80,11 @@ export function SettingsPanel() {
           mute_window_end: muteTo,
         },
       });
-      // Tell the pet window to refresh its in-memory mute schedule
-      // (T3.4 — bubbles read from petStore which mirrors these values).
       void emit("settings:mute-changed", {
         mute_window_start: muteFrom,
         mute_window_end: muteTo,
       });
-      flash("Quiet hours saved.");
+      flash(t.settings.quietHoursSaved);
     } catch (err) {
       console.error("[settings] save mute", err);
     }
@@ -91,7 +96,7 @@ export function SettingsPanel() {
       await invoke("clear_all_events");
       setConfirmClear(false);
       await reload();
-      flash("All data cleared.");
+      flash(t.settings.cleared);
     } catch (err) {
       console.error("[settings] clear failed", err);
     } finally {
@@ -103,10 +108,7 @@ export function SettingsPanel() {
     <div className="sp-root">
       {statusMsg ? <div className="sp-toast">{statusMsg}</div> : null}
 
-      <Section
-        title="Data folder"
-        hint="Notchi watches this directory recursively for *.jsonl writes."
-      >
+      <Section title={t.settings.dataFolder} hint={t.settings.dataFolderHint}>
         <div className="sp-row">
           <input
             type="text"
@@ -124,28 +126,18 @@ export function SettingsPanel() {
             disabled={savingDir || dirInput.trim().length === 0}
             onClick={() => void handleSaveDir()}
           >
-            {savingDir ? "Saving…" : "Apply"}
+            {savingDir ? t.settings.applying : t.settings.apply}
           </button>
         </div>
         {dirErr ? <p className="sp-err">{dirErr}</p> : null}
         {bundle && !bundle.claude_code_found ? (
-          <p className="sp-warn">
-            Claude Code not auto-detected. Paste the absolute path to your
-            <code> ~/.claude/projects </code>folder above.
-          </p>
+          <p className="sp-warn">{t.settings.claudeNotFound}</p>
         ) : null}
       </Section>
 
-      <Section
-        title="Data sources"
-        hint="AI tools Notchi has detected on this Mac. Each runs its own watcher and dedupes against the same SQLite cache."
-      >
+      <Section title={t.settings.dataSources} hint={t.settings.dataSourcesHint}>
         {sources.length === 0 ? (
-          <p className="sp-empty">
-            No data sources detected yet. Notchi auto-discovers Claude Code (
-            <code>~/.claude/projects</code>) and Codex CLI (
-            <code>~/.codex/sessions</code>) on launch.
-          </p>
+          <p className="sp-empty">{t.settings.noSourcesYet}</p>
         ) : (
           <ul className="sp-source-list">
             {sources.map((s) => (
@@ -154,12 +146,14 @@ export function SettingsPanel() {
                   {formatSourceName(s.name)}
                 </span>
                 <span className="sp-source-stat">
-                  {s.events_count.toLocaleString()} events
+                  {t.settings.eventsCount(s.events_count)}
                 </span>
                 <span className="sp-source-stat">
                   {s.last_ingest_at
-                    ? `ingested ${new Date(s.last_ingest_at).toLocaleTimeString()}`
-                    : "idle"}
+                    ? t.settings.ingested(
+                        new Date(s.last_ingest_at).toLocaleTimeString(),
+                      )
+                    : t.settings.idle}
                 </span>
               </li>
             ))}
@@ -167,13 +161,10 @@ export function SettingsPanel() {
         )}
       </Section>
 
-      <Section
-        title="Quiet hours"
-        hint="Bubbles are suppressed during this window. macOS notifications are unaffected — adjust those independently in System Settings → Notifications."
-      >
+      <Section title={t.settings.quietHours} hint={t.settings.quietHoursHint}>
         <div className="sp-row">
           <label className="sp-time-label">
-            From
+            {t.settings.from}
             <input
               type="time"
               className="sp-input sp-input-time"
@@ -182,7 +173,7 @@ export function SettingsPanel() {
             />
           </label>
           <label className="sp-time-label">
-            To
+            {t.settings.to}
             <input
               type="time"
               className="sp-input sp-input-time"
@@ -195,26 +186,38 @@ export function SettingsPanel() {
             className="sp-btn"
             onClick={() => void handleSaveMute()}
           >
-            Save
+            {t.settings.save}
           </button>
         </div>
       </Section>
 
-      <Section
-        title="Danger zone"
-        hint="Wipes the local events table. Notchi will rebuild from existing jsonl files automatically."
-      >
+      <Section title={t.settings.language} hint={t.settings.languageHint}>
+        <div className="sp-row">
+          {(["zh", "en"] as Locale[]).map((lang) => (
+            <button
+              key={lang}
+              type="button"
+              className={"sp-chip" + (locale === lang ? " is-active" : "")}
+              onClick={() => setLocale(lang)}
+            >
+              {lang === "zh" ? "中文" : "English"}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section title={t.settings.dangerZone} hint={t.settings.dangerZoneHint}>
         {!confirmClear ? (
           <button
             type="button"
             className="sp-btn sp-btn-danger"
             onClick={() => setConfirmClear(true)}
           >
-            Clear all data…
+            {t.settings.clearAll}
           </button>
         ) : (
           <div className="sp-confirm">
-            <p>This will permanently delete the local SQLite cache.</p>
+            <p>{t.settings.clearConfirm}</p>
             <div className="sp-row">
               <button
                 type="button"
@@ -222,7 +225,7 @@ export function SettingsPanel() {
                 onClick={() => setConfirmClear(false)}
                 disabled={clearing}
               >
-                Cancel
+                {t.settings.cancel}
               </button>
               <button
                 type="button"
@@ -230,27 +233,25 @@ export function SettingsPanel() {
                 onClick={() => void handleClearAll()}
                 disabled={clearing}
               >
-                {clearing ? "Clearing…" : "Yes, clear everything"}
+                {clearing ? t.settings.clearing : t.settings.yesClear}
               </button>
             </div>
           </div>
         )}
       </Section>
 
-      <Section title="About">
+      <Section title={t.settings.about}>
         <ul className="sp-meta">
           <li>
-            <span>Version</span>
+            <span>{t.settings.version}</span>
             <strong>0.1.0 (T2 MVP)</strong>
           </li>
           <li>
-            <span>Privacy</span>
-            <strong>
-              Nothing leaves this Mac. No telemetry, no uploads, ever.
-            </strong>
+            <span>{t.settings.privacy}</span>
+            <strong>{t.settings.privacyValue}</strong>
           </li>
           <li>
-            <span>Spec</span>
+            <span>{t.settings.spec}</span>
             <strong>SPEC.md §4 / §5 / §6</strong>
           </li>
         </ul>

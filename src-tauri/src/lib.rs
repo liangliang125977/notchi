@@ -187,6 +187,7 @@ pub fn run() {
             data::commands::token_timeseries,
             data::commands::token_by_source,
             data::commands::token_by_model,
+            data::commands::token_by_project,
             data::commands::recent_sessions,
             data::commands::get_pricing_config,
             data::commands::set_pricing_entry,

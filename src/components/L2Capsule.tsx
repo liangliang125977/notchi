@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useTokenSnapshot, snapshotDeltaPct } from "../hooks/useTokenSnapshot";
+import { useT } from "../hooks/useT";
 import {
   formatModel,
   formatRelativeMinutes,
@@ -44,6 +45,7 @@ export function L2Capsule({ visible }: Props) {
 }
 
 function CapsuleRow({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
+  const t = useT();
   const tokens =
     snap.summary != null
       ? snap.summary.total_input + snap.summary.total_output
@@ -62,7 +64,7 @@ function CapsuleRow({ snap }: { snap: ReturnType<typeof useTokenSnapshot> }) {
     return (
       <div className="l2-rows">
         <div className="l2-row">
-          <span className="l2-idle">No activity yet today</span>
+          <span className="l2-idle">{t.l2.noActivityToday}</span>
         </div>
       </div>
     );

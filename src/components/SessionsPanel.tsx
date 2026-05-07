@@ -7,6 +7,7 @@ import {
   formatTokens,
   shortProjectPath,
 } from "../lib/format";
+import { useT } from "../hooks/useT";
 
 // SPEC §3 v1.2 — full session browser. Lists up to 50 sessions for
 // the chosen window. Backend caps "All" at 30 days for v1.2 scope;
@@ -14,13 +15,6 @@ import {
 // foot-note hint instead.
 
 type FilterPeriod = Period | "all";
-
-const FILTER_OPTIONS: ReadonlyArray<{ id: FilterPeriod; label: string }> = [
-  { id: "today", label: "Today" },
-  { id: "week", label: "Week" },
-  { id: "month", label: "Month" },
-  { id: "all", label: "All" },
-];
 
 const ROW_LIMIT = 50;
 
@@ -31,6 +25,15 @@ interface State {
 }
 
 export function SessionsPanel() {
+  const t = useT();
+
+  const FILTER_OPTIONS: ReadonlyArray<{ id: FilterPeriod; label: string }> = [
+    { id: "today", label: t.period.today },
+    { id: "week", label: t.period.week },
+    { id: "month", label: t.period.month },
+    { id: "all", label: t.period.all },
+  ];
+
   const [period, setPeriod] = useState<FilterPeriod>("week");
   const [query, setQuery] = useState("");
   const [s, setS] = useState<State>({ rows: [], loading: true, err: null });
@@ -94,37 +97,39 @@ export function SessionsPanel() {
           </div>
         </div>
         <p className="sx-foot">
-          Showing {filtered.length} of {s.rows.length} sessions (
-          {period === "all" ? "last 30 days" : period}
-          ).
+          {t.sessions.showing(
+            filtered.length,
+            s.rows.length,
+            period === "all" ? t.sessions.last30days : t.period[period],
+          )}
         </p>
       </header>
 
       {s.err ? (
-        <p className="ov-error">Failed to load sessions: {s.err}</p>
+        <p className="ov-error">{t.sessions.failedToLoad(s.err)}</p>
       ) : s.loading && s.rows.length === 0 ? (
-        <p className="ov-empty">Loading sessions…</p>
+        <p className="ov-empty">{t.sessions.loadingsessions}</p>
       ) : filtered.length === 0 ? (
-        <p className="ov-empty">No sessions match.</p>
+        <p className="ov-empty">{t.sessions.noMatch}</p>
       ) : (
-        <SessionTable rows={filtered} />
+        <SessionTable rows={filtered} t={t} />
       )}
     </div>
   );
 }
 
-function SessionTable({ rows }: { rows: SessionRow[] }) {
+function SessionTable({ rows, t }: { rows: SessionRow[]; t: ReturnType<typeof useT> }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
     <table className="sx-table">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Project</th>
-          <th>Model</th>
-          <th className="sx-num">Tokens</th>
-          <th>Source</th>
+          <th>{t.sessions.colTime}</th>
+          <th>{t.sessions.colProject}</th>
+          <th>{t.sessions.colModel}</th>
+          <th className="sx-num">{t.sessions.colTokens}</th>
+          <th>{t.sessions.colSource}</th>
         </tr>
       </thead>
       <tbody>
@@ -136,6 +141,7 @@ function SessionTable({ rows }: { rows: SessionRow[] }) {
               row={r}
               expanded={isOpen}
               onToggle={() => setExpanded(isOpen ? null : r.session_id)}
+              t={t}
             />
           );
         })}
@@ -148,10 +154,12 @@ function SessionRowView({
   row,
   expanded,
   onToggle,
+  t,
 }: {
   row: SessionRow;
   expanded: boolean;
   onToggle: () => void;
+  t: ReturnType<typeof useT>;
 }) {
   return (
     <>
@@ -175,15 +183,15 @@ function SessionRowView({
           <td colSpan={5}>
             <dl className="sx-detail">
               <div>
-                <dt>Session ID</dt>
+                <dt>{t.sessions.detailSessionId}</dt>
                 <dd className="is-mono">{row.session_id}</dd>
               </div>
               <div>
-                <dt>Project</dt>
+                <dt>{t.sessions.detailProject}</dt>
                 <dd className="is-mono">{row.project_path ?? "—"}</dd>
               </div>
               <div>
-                <dt>Started</dt>
+                <dt>{t.sessions.detailStarted}</dt>
                 <dd>{row.started_at}</dd>
               </div>
             </dl>

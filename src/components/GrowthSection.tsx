@@ -78,7 +78,6 @@ export function GrowthSection() {
     <section className="ov-section gw-section">
       <header className="ov-section-head">
         <h3>Growth</h3>
-        <span className="ov-section-aside">v1.1</span>
       </header>
 
       <div className="gw-grid">

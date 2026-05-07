@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { usePetStore, type PetSize } from "../stores/petStore";
+import { useT } from "../hooks/useT";
 import {
   PET_ACTIONS,
   PET_FORCE_FALLBACK_EVENT,
@@ -34,12 +35,6 @@ const TARGET_SCREEN_ID_KEY = "targetScreenId";
 const PET_SIZE_KEY = "petSize";
 const STORE_PATH = "settings.json";
 const DEFAULT_MODE: NotchMode = "auto";
-
-const NOTCH_MODE_OPTIONS: ReadonlyArray<{ value: NotchMode; label: string }> = [
-  { value: "auto", label: "Auto-detect (recommended)" },
-  { value: "force-notch", label: "Force notch layout" },
-  { value: "force-no-notch", label: "Force no-notch layout" },
-];
 
 const PET_ACTION_LABELS: Record<PetAction, string> = {
   idle: "Idle",
@@ -210,6 +205,14 @@ export function PetPanel() {
     }
   }
 
+  const t = useT();
+
+  const NOTCH_MODE_OPTIONS: ReadonlyArray<{ value: NotchMode; label: string }> = [
+    { value: "auto", label: "Auto-detect (recommended)" },
+    { value: "force-notch", label: "Force notch layout" },
+    { value: "force-no-notch", label: "Force no-notch layout" },
+  ];
+
   const isDev = import.meta.env.DEV;
 
   const [sources, setSources] = useState<SourceStatus[]>([]);
@@ -236,17 +239,14 @@ export function PetPanel() {
     <div className="sp-root">
       {renderMode === "fallback" ? (
         <div className="sp-banner sp-banner-warn" role="alert">
-          Live2D failed to load — currently rendering the static PNG fallback.
-          Restart Notchi or check the console for details.
+          {t.pet.fallbackBanner}
         </div>
       ) : null}
 
       <section className="sp-section">
         <header className="sp-section-head">
-          <h3>Pet size</h3>
-          <p className="sp-section-hint">
-            Large (240 px) or Small (120 px). Takes effect immediately.
-          </p>
+          <h3>{t.pet.petSize}</h3>
+          <p className="sp-section-hint">{t.pet.petSizeHint}</p>
         </header>
         <div className="sp-section-body">
           <div className="sp-action-row">
@@ -256,7 +256,7 @@ export function PetPanel() {
               disabled={!ready}
               onClick={() => void handlePetSizeChange("large")}
             >
-              Large
+              {t.pet.large}
             </button>
             <button
               type="button"
@@ -264,7 +264,7 @@ export function PetPanel() {
               disabled={!ready}
               onClick={() => void handlePetSizeChange("small")}
             >
-              Small
+              {t.pet.small}
             </button>
           </div>
         </div>
@@ -272,10 +272,8 @@ export function PetPanel() {
 
       <section className="sp-section">
         <header className="sp-section-head">
-          <h3>宠物角色</h3>
-          <p className="sp-section-hint">
-            切换立即生效。所有模型均来自 Live2D 官方免费素材。
-          </p>
+          <h3>{t.pet.petCharacter}</h3>
+          <p className="sp-section-hint">{t.pet.petCharacterHint}</p>
         </header>
         <div className="sp-section-body">
           <div className="sp-action-row" style={{ flexWrap: "wrap", gap: "8px" }}>
@@ -297,10 +295,8 @@ export function PetPanel() {
 
       <section className="sp-section">
         <header className="sp-section-head">
-          <h3>Notch layout</h3>
-          <p className="sp-section-hint">
-            Apply on next launch. Auto-detect handles most Macs correctly.
-          </p>
+          <h3>{t.pet.notchLayout}</h3>
+          <p className="sp-section-hint">{t.pet.notchLayoutHint}</p>
         </header>
         <div className="sp-section-body">
           <select
@@ -322,11 +318,8 @@ export function PetPanel() {
 
       <section className="sp-section">
         <header className="sp-section-head">
-          <h3>Target display</h3>
-          <p className="sp-section-hint">
-            Pick which screen Notchi docks onto. Defaults to the current main
-            display.
-          </p>
+          <h3>{t.pet.targetDisplay}</h3>
+          <p className="sp-section-hint">{t.pet.targetDisplayHint}</p>
         </header>
         <div className="sp-section-body">
           <select
@@ -339,18 +332,18 @@ export function PetPanel() {
               )
             }
           >
-            <option value="">Main (follow active display)</option>
+            <option value="">{t.pet.mainDisplay}</option>
             {screens.map((sc) => (
               <option key={sc.id} value={sc.id}>
                 {sc.name}
-                {sc.is_main ? " · main" : ""}
-                {sc.has_notch ? " · notch" : ""} · {Math.round(sc.width)}×
+                {sc.is_main ? ` · ${t.pet.main}` : ""}
+                {sc.has_notch ? ` · ${t.pet.notch}` : ""} · {Math.round(sc.width)}×
                 {Math.round(sc.height)}
               </option>
             ))}
           </select>
           {screens.length === 0 ? (
-            <p className="sp-hint">No additional displays detected.</p>
+            <p className="sp-hint">{t.pet.noDisplays}</p>
           ) : null}
         </div>
       </section>

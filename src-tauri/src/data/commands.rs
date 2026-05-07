@@ -62,6 +62,16 @@ pub async fn token_by_model(
 }
 
 #[tauri::command]
+pub async fn token_by_project(
+    state: State<'_, DataState>,
+    period: String,
+) -> Result<Vec<GroupRow>, String> {
+    queries::token_by_project(pool_of(&state), Period::from_str(&period))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn recent_sessions(
     state: State<'_, DataState>,
     limit: Option<i64>,

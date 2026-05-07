@@ -29,9 +29,12 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| handle_menu_event(app, &event))
         .on_tray_icon_event(|tray, event| {
+            // Use Down instead of Up: on macOS the Up event is unreliable
+            // when the settings window already holds focus (NSStatusItem
+            // swallows the Up event after the app activates).
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
+                button_state: MouseButtonState::Down,
                 ..
             } = event
             {

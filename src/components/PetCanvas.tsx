@@ -8,26 +8,10 @@ import {
   type PetAction,
   type PetSetActionPayload,
 } from "../stores/petStore";
+import { type ActionMotions, getModelById } from "../lib/petModels";
 
 const CANVAS_SIZE = 240;
-const MODEL_URL = "/assets/live2d/mao/mao_pro.model3.json";
-
-interface ActionMapping {
-  group: string;
-  index: number;
-}
-
-// SPEC §5.2 + CHANGELOG T1.5 — see `mao_pro.model3.json` for the
-// underlying motion list. Mao_Pro ships only `Idle` + 6 unlabelled
-// motions, so the four non-idle states are mapped to special_0x picks
-// chosen for visual distinctness; the mapping is documented in
-// CHANGELOG and intentionally heuristic for MVP.
-const ACTION_MOTION: Record<Exclude<PetAction, "sleep">, ActionMapping> = {
-  idle: { group: "Idle", index: 0 },
-  coding: { group: "", index: 3 },
-  waiting: { group: "", index: 4 },
-  done: { group: "", index: 5 },
-};
+const DEFAULT_MODEL_URL = "/assets/live2d/mao/mao_pro.model3.json";
 
 const EYE_PARAM_IDS = ["ParamEyeLOpen", "ParamEyeROpen"] as const;
 
@@ -45,11 +29,11 @@ function applySleepEyelids(model: Live2DModel) {
   }
 }
 
-async function playMotion(model: Live2DModel, action: PetAction) {
+async function playMotion(model: Live2DModel, action: PetAction, motions: ActionMotions) {
   if (action === "sleep") {
     return;
   }
-  const mapping = ACTION_MOTION[action];
+  const mapping = motions[action];
   try {
     await model.motion(mapping.group, mapping.index, MotionPriority.FORCE);
   } catch (err) {
@@ -57,7 +41,17 @@ async function playMotion(model: Live2DModel, action: PetAction) {
   }
 }
 
-export function PetCanvas() {
+interface PetCanvasProps {
+  size?: number;
+  modelUrl?: string;
+  actionMotions?: ActionMotions;
+}
+
+export function PetCanvas({
+  size = CANVAS_SIZE,
+  modelUrl = DEFAULT_MODEL_URL,
+  actionMotions = getModelById("mao").actionMotions,
+}: PetCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
 
@@ -78,7 +72,10 @@ export function PetCanvas() {
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
-    container.appendChild(app.view as HTMLCanvasElement);
+    const canvas = app.view as HTMLCanvasElement;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    container.appendChild(canvas);
 
     let model: Live2DModel | null = null;
     let cancelled = false;
@@ -97,7 +94,7 @@ export function PetCanvas() {
 
     (async () => {
       try {
-        const loaded = await Live2DModel.from(MODEL_URL);
+        const loaded = await Live2DModel.from(modelUrl);
         if (cancelled) {
           loaded.destroy();
           return;
@@ -141,7 +138,7 @@ export function PetCanvas() {
           internalModelRef.eyeBlink = origEyeBlink;
         };
 
-        await playMotion(loaded, usePetStore.getState().currentAction);
+        await playMotion(loaded, usePetStore.getState().currentAction, actionMotions);
 
         let lastAction = usePetStore.getState().currentAction;
         unsubscribeStore = usePetStore.subscribe((state) => {
@@ -150,15 +147,12 @@ export function PetCanvas() {
           lastAction = next;
           if (!model) return;
           if (next === "sleep") {
-            // Halt motion + disable auto-blink so nothing reopens
-            // the eyes between frames; the per-frame update wrapper
-            // re-applies eye=0 after motion writes finish.
             loaded.internalModel.motionManager.stopAllMotions();
             internalModelRef.eyeBlink = null;
             applySleepEyelids(model);
           } else {
             internalModelRef.eyeBlink = origEyeBlink;
-            void playMotion(model, next);
+            void playMotion(model, next, actionMotions);
           }
         });
 
@@ -191,5 +185,5 @@ export function PetCanvas() {
     };
   }, []);
 
-  return <div ref={containerRef} className="pet-canvas-inner" />;
+  return <div ref={containerRef} className="pet-canvas-inner" style={{ width: size, height: size }} />;
 }

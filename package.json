@@ -1,5 +1,5 @@
 {
-  "name": "coding-pet",
+  "name": "notchi",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -27,6 +27,7 @@
     "pixi.js": "^7.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-is": "^19.2.6",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.13"

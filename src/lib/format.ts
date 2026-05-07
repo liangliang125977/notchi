@@ -6,7 +6,7 @@ export function formatTokens(n: number): string {
   if (!Number.isFinite(n)) return "—";
   const abs = Math.abs(n);
   if (abs < 1000) return `${Math.round(n)}`;
-  if (abs < 1_000_000) return `${(n / 1000).toFixed(abs < 10_000 ? 1 : 1)}K`;
+  if (abs < 1_000_000) return `${(n / 1000).toFixed(abs < 10_000 ? 1 : 0)}K`;
   return `${(n / 1_000_000).toFixed(abs < 10_000_000 ? 2 : 1)}M`;
 }
 

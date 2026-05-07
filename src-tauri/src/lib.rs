@@ -24,11 +24,6 @@ const TARGET_SCREEN_ID_KEY: &str = "targetScreenId";
 /// User-selected pet size: "large" (240) or "small" (120). Default "large".
 const PET_SIZE_KEY: &str = "petSize";
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 /// SPEC §6.7 D4 — frontend asks Rust for the current default pet
 /// position so it can compute the snap distance with the same numbers
 /// the setup hook used. Returns top-left logical pixels and the pet
@@ -182,7 +177,6 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             pet_default_target_position,
             pet_main_screen_id,
             open_macos_notifications_settings,

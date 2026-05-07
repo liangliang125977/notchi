@@ -11,6 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 use super::queries::{self, GroupRow, Period, PricingEntry, SessionRow, TimeseriesPoint, TokenSummary};
 use super::sessions::SessionTracker;
+use super::sources::opencode as opencode_source;
 use super::species::{self, SpeciesStatus};
 use super::{ingest, DataState, IngestStatus, SourceStatus};
 
@@ -336,6 +337,17 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
                 }
             });
         }
+    }
+
+    // OpenCode uses SQLite, not JSONL — run a standalone polling sync
+    // instead of the JSONL adapter pipeline.
+    if let Some(oc_path) = opencode_source::find_db() {
+        let pool_oc = pool.clone();
+        let status_oc = status.clone();
+        let app_oc = app.clone();
+        tokio::spawn(async move {
+            opencode_source::run_poller(app_oc, pool_oc, oc_path, status_oc).await;
+        });
     }
 
     Ok(DataState { pool, status, rescan, sessions })

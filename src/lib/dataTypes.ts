@@ -49,6 +49,7 @@ export type SessionRow = {
   cost_usd: string;
   model: string;
   project_path: string | null;
+  source: string;
 };
 
 export type PricingEntry = {

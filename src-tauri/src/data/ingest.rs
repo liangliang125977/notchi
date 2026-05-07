@@ -28,7 +28,7 @@ use super::pricing::{self, Pricing};
 use super::sessions::{CompletionEvent, SessionTracker};
 use super::sources::{
     self, claude_code::ClaudeCodeAdapter, claude_desktop::ClaudeDesktopAdapter,
-    codex::CodexAdapter, cursor::CursorAdapter, opencode::OpenCodeAdapter, DataSourceAdapter,
+    codex::CodexAdapter, cursor::CursorAdapter, DataSourceAdapter,
     EventKind as ParsedKind, ParseAdapter,
     ParsedEvent,
 };
@@ -69,17 +69,8 @@ pub fn resolve_sources<R: Runtime>(app: &AppHandle<R>) -> Vec<sources::ResolvedA
             paths: claude_desktop_paths,
         });
     }
-    // OpenCode + Cursor stubs reserved for v1.0 step 2. Their
-    // discover_paths intentionally returns empty until we have a real
-    // sample shape to parse.
-    let opencode = OpenCodeAdapter;
-    let opencode_paths = opencode.discover_paths(app);
-    if !opencode_paths.is_empty() {
-        out.push(sources::ResolvedAdapter {
-            adapter: Arc::new(opencode),
-            paths: opencode_paths,
-        });
-    }
+    // OpenCode uses SQLite — handled by opencode_source::run_poller in
+    // commands.rs; no JSONL adapter needed here.
     let cursor = CursorAdapter;
     let cursor_paths = cursor.discover_paths(app);
     if !cursor_paths.is_empty() {

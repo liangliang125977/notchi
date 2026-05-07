@@ -235,13 +235,13 @@ export function OverviewPanel({ onJumpToBudget }: Props) {
           <header className="ov-section-head">
             <h3>By tool</h3>
           </header>
-          <BarList rows={s.bySource} formatKey={(k) => k} />
+          <BarList rows={s.bySource} period={period} formatKey={(k) => k} />
         </section>
         <section className="ov-section">
           <header className="ov-section-head">
             <h3>By model</h3>
           </header>
-          <BarList rows={s.byModel} formatKey={(k) => formatModel(k)} />
+          <BarList rows={s.byModel} period={period} formatKey={(k) => formatModel(k)} />
         </section>
       </div>
 
@@ -400,15 +400,23 @@ function DistributionChart({
   );
 }
 
+const PERIOD_EMPTY: Record<Period, string> = {
+  today: "No data yet today.",
+  week: "No data this week.",
+  month: "No data this month.",
+};
+
 function BarList({
   rows,
+  period,
   formatKey,
 }: {
   rows: GroupRow[];
+  period: Period;
   formatKey: (k: string) => string;
 }) {
   if (rows.length === 0) {
-    return <p className="ov-empty">No data yet today.</p>;
+    return <p className="ov-empty">{PERIOD_EMPTY[period]}</p>;
   }
   return (
     <ul className="ov-bars">
@@ -461,7 +469,7 @@ function BudgetBar({
 
 function RecentSessions({ rows }: { rows: SessionRow[] }) {
   if (rows.length === 0) {
-    return <p className="ov-empty">No sessions yet today.</p>;
+    return <p className="ov-empty">No recent sessions.</p>;
   }
   return (
     <table className="ov-table">

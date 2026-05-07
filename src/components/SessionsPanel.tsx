@@ -171,7 +171,7 @@ function SessionRowView({
         <td className="sx-td-model">{formatModel(row.model)}</td>
         <td className="sx-num">{formatTokens(row.total_tokens)}</td>
         <td className="sx-num">{formatCost(row.cost_usd)}</td>
-        <td className="sx-td-source">claude-code</td>
+        <td className="sx-td-source">{row.source}</td>
       </tr>
       {expanded ? (
         <tr className="sx-row-detail">

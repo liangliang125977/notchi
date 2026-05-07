@@ -16,6 +16,7 @@ const PENDING_INPUT_EVENT = "pet:pending-input";
 const NOTIFICATIONS_DENIED_EVENT = "pet:notifications-denied";
 
 interface CompletionPayload {
+  source: string;
   session_id: string;
   model: string | null;
   stop_reason: string;
@@ -131,7 +132,7 @@ export function useEmotionEngine() {
             // v1.1 — feed the pet on every completion. Privacy: only
             // model name + source tag are sent; no path / content.
             void invoke("record_feed", {
-              source: "claude-code",
+              source: payload.source,
               model: payload.model,
             }).catch((err) => {
               console.error("[emotion] record_feed failed", err);

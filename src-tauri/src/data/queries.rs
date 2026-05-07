@@ -169,6 +169,7 @@ pub struct SessionRow {
     pub cost_usd: String,
     pub model: String,
     pub project_path: Option<String>,
+    pub source: String,
 }
 
 /// Returns sessions whose first event falls inside `period`. A
@@ -189,7 +190,8 @@ pub async fn recent_sessions_in(
                 tokens,
                 cost,
                 model,
-                project_path
+                project_path,
+                source
          FROM (
             SELECT session_id,
                    MIN(timestamp) AS started_at,
@@ -198,7 +200,9 @@ pub async fn recent_sessions_in(
                    (SELECT model FROM events e2 WHERE e2.session_id = e1.session_id
                     GROUP BY model ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS model,
                    (SELECT project_path FROM events e3 WHERE e3.session_id = e1.session_id
-                    AND project_path IS NOT NULL LIMIT 1) AS project_path
+                    AND project_path IS NOT NULL LIMIT 1) AS project_path,
+                   (SELECT source FROM events e4 WHERE e4.session_id = e1.session_id
+                    GROUP BY source ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS source
             FROM events e1
             GROUP BY session_id
          )
@@ -206,17 +210,18 @@ pub async fn recent_sessions_in(
          ORDER BY started_at DESC
          LIMIT ?1"
     );
-    let rows: Vec<(String, String, i64, f64, String, Option<String>)> =
+    let rows: Vec<(String, String, i64, f64, String, Option<String>, String)> =
         sqlx::query_as(&sql).bind(limit).fetch_all(pool).await?;
     Ok(rows
         .into_iter()
-        .map(|(s, st, t, c, m, p)| SessionRow {
+        .map(|(s, st, t, c, m, p, src)| SessionRow {
             session_id: s,
             started_at: st,
             total_tokens: t,
             cost_usd: format!("{c:.4}"),
             model: m,
             project_path: p,
+            source: src,
         })
         .collect())
 }

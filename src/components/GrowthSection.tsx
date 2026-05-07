@@ -101,13 +101,13 @@ export function GrowthSection() {
 
         <div className="gw-stat">
           <span className="gw-stat-label">Saturation</span>
+          <span className="gw-stat-value">{feed_level} / 100</span>
           <div className="gw-bar" aria-hidden="true">
             <div
               className={"gw-bar-fill gw-bar-feed-" + mood}
               style={{ width: `${Math.min(100, feed_level)}%` }}
             />
           </div>
-          <span className="gw-stat-value">{feed_level} / 100</span>
         </div>
 
         <div className="gw-stat">

@@ -445,7 +445,7 @@ body {
   display: grid;
   grid-template-columns: minmax(220px, 1.4fr) 1fr 1fr;
   gap: 16px;
-  align-items: center;
+  align-items: start;
 }
 
 .gw-stage {
@@ -494,7 +494,8 @@ body {
 }
 
 .gw-stat-value {
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--sp-card-fg);
   font-variant-numeric: tabular-nums;
 }

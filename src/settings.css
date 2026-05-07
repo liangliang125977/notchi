@@ -994,14 +994,15 @@ body {
 
 .sp-source-name {
   font-weight: 500;
+  color: var(--sp-card-fg);
 }
 
 .sp-source-stat {
-  color: var(--sp-card-muted, rgba(0, 0, 0, 0.55));
+  color: var(--sp-muted);
 }
 
 .sp-source-roots {
-  color: var(--sp-card-muted, rgba(0, 0, 0, 0.55));
+  color: var(--sp-muted);
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   word-break: break-all;

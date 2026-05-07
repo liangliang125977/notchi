@@ -109,7 +109,8 @@ pub async fn token_timeseries(
     };
     let sql = format!(
         "SELECT {bucket_expr} AS bucket,
-                COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
+                COALESCE(SUM(input_tokens + output_tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens,
                 COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost
          FROM events
          WHERE timestamp >= {lb}
@@ -223,14 +224,17 @@ pub async fn recent_sessions_in(
          FROM (
             SELECT session_id,
                    MIN(timestamp) AS started_at,
-                   COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
+                   COALESCE(SUM(input_tokens + output_tokens
+                                + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens,
                    COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost,
                    (SELECT model FROM events e2 WHERE e2.session_id = e1.session_id
-                    GROUP BY model ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS model,
+                    GROUP BY model ORDER BY SUM(input_tokens + output_tokens
+                                               + cache_read_input_tokens + cache_creation_input_tokens) DESC LIMIT 1) AS model,
                    (SELECT project_path FROM events e3 WHERE e3.session_id = e1.session_id
                     AND project_path IS NOT NULL LIMIT 1) AS project_path,
                    (SELECT source FROM events e4 WHERE e4.session_id = e1.session_id
-                    GROUP BY source ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS source
+                    GROUP BY source ORDER BY SUM(input_tokens + output_tokens
+                                                + cache_read_input_tokens + cache_creation_input_tokens) DESC LIMIT 1) AS source
             FROM events e1
             GROUP BY session_id
          )

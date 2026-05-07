@@ -44,6 +44,11 @@ CREATE INDEX IF NOT EXISTS idx_events_source_model ON events(source, model);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_events_msg_dedupe
     ON events(message_id, request_id)
     WHERE message_id IS NOT NULL AND request_id IS NOT NULL;
+-- Per-source message dedup for SQLite-backed sources (no request_id).
+-- Uses a partial index so it doesn't collide with JSONL source dedupe logic.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_source_msgid
+    ON events(source, message_id)
+    WHERE source = 'opencode' AND message_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS ingest_state (
     jsonl_path TEXT PRIMARY KEY,

@@ -2,16 +2,21 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { usePetStore, type PetSize } from "../stores/petStore";
+import { useT } from "../hooks/useT";
 import {
   PET_ACTIONS,
   PET_FORCE_FALLBACK_EVENT,
+  PET_MODEL_CHANGED_EVENT,
   PET_RENDER_MODE_EVENT,
   PET_SET_ACTION_EVENT,
+  SELECTED_MODEL_KEY,
   type PetAction,
   type PetRenderMode,
   type PetRenderModePayload,
   type PetSetActionPayload,
 } from "../stores/petStore";
+import { PET_MODELS, DEFAULT_MODEL_ID } from "../lib/petModels";
 import type { SourceStatus } from "../lib/dataTypes";
 
 type NotchMode = "auto" | "force-notch" | "force-no-notch";
@@ -27,14 +32,9 @@ interface ScreenInfo {
 
 const NOTCH_MODE_KEY = "notchMode";
 const TARGET_SCREEN_ID_KEY = "targetScreenId";
+const PET_SIZE_KEY = "petSize";
 const STORE_PATH = "settings.json";
 const DEFAULT_MODE: NotchMode = "auto";
-
-const NOTCH_MODE_OPTIONS: ReadonlyArray<{ value: NotchMode; label: string }> = [
-  { value: "auto", label: "Auto-detect (recommended)" },
-  { value: "force-notch", label: "Force notch layout" },
-  { value: "force-no-notch", label: "Force no-notch layout" },
-];
 
 const PET_ACTION_LABELS: Record<PetAction, string> = {
   idle: "Idle",
@@ -48,25 +48,32 @@ export function PetPanel() {
   const [store, setStore] = useState<Store | null>(null);
   const [mode, setMode] = useState<NotchMode>(DEFAULT_MODE);
   const [ready, setReady] = useState(false);
+  const petSize = usePetStore((s) => s.petSize);
+  const setPetSizeStore = usePetStore((s) => s.setPetSize);
   const [activeAction, setActiveAction] = useState<PetAction>("idle");
   const [renderMode, setRenderMode] = useState<PetRenderMode>("live2d");
   const [screens, setScreens] = useState<ScreenInfo[]>([]);
   const [targetScreen, setTargetScreen] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const s = await load(STORE_PATH, {
-          defaults: { [NOTCH_MODE_KEY]: DEFAULT_MODE },
+          defaults: { [NOTCH_MODE_KEY]: DEFAULT_MODE, [PET_SIZE_KEY]: "large" },
           autoSave: true,
         });
         const stored = await s.get<NotchMode>(NOTCH_MODE_KEY);
         const storedTarget = await s.get<string | null>(TARGET_SCREEN_ID_KEY);
+        const storedSize = await s.get<PetSize>(PET_SIZE_KEY);
+        const storedModel = await s.get<string>(SELECTED_MODEL_KEY);
         if (cancelled) return;
         setStore(s);
         setMode(stored ?? DEFAULT_MODE);
         setTargetScreen(storedTarget ?? null);
+        if (storedSize) setPetSizeStore(storedSize);
+        if (storedModel) setSelectedModel(storedModel);
         setReady(true);
       } catch (err) {
         console.error("[pet-panel] failed to load store", err);
@@ -105,6 +112,15 @@ export function PetPanel() {
     };
   }, []);
 
+  async function handlePetSizeChange(next: PetSize) {
+    setPetSizeStore(next);
+    try {
+      await invoke("set_pet_size", { size: next });
+    } catch (err) {
+      console.error("[pet-panel] set_pet_size failed", err);
+    }
+  }
+
   async function handleNotchModeChange(next: NotchMode) {
     setMode(next);
     if (!store) return;
@@ -131,6 +147,18 @@ export function PetPanel() {
       await emit(PET_SET_ACTION_EVENT, payload);
     } catch (err) {
       console.error("[pet-panel] failed to emit pet action", err);
+    }
+  }
+
+  async function handleModelChange(modelId: string) {
+    setSelectedModel(modelId);
+    if (store) {
+      await store.set(SELECTED_MODEL_KEY, modelId);
+    }
+    try {
+      await emit(PET_MODEL_CHANGED_EVENT, { modelId });
+    } catch (err) {
+      console.error("[pet-panel] failed to emit model change", err);
     }
   }
 
@@ -177,6 +205,14 @@ export function PetPanel() {
     }
   }
 
+  const t = useT();
+
+  const NOTCH_MODE_OPTIONS: ReadonlyArray<{ value: NotchMode; label: string }> = [
+    { value: "auto", label: "Auto-detect (recommended)" },
+    { value: "force-notch", label: "Force notch layout" },
+    { value: "force-no-notch", label: "Force no-notch layout" },
+  ];
+
   const isDev = import.meta.env.DEV;
 
   const [sources, setSources] = useState<SourceStatus[]>([]);
@@ -203,17 +239,64 @@ export function PetPanel() {
     <div className="sp-root">
       {renderMode === "fallback" ? (
         <div className="sp-banner sp-banner-warn" role="alert">
-          Live2D failed to load — currently rendering the static PNG fallback.
-          Restart Notchi or check the console for details.
+          {t.pet.fallbackBanner}
         </div>
       ) : null}
 
       <section className="sp-section">
         <header className="sp-section-head">
-          <h3>Notch layout</h3>
-          <p className="sp-section-hint">
-            Apply on next launch. Auto-detect handles most Macs correctly.
-          </p>
+          <h3>{t.pet.petSize}</h3>
+          <p className="sp-section-hint">{t.pet.petSizeHint}</p>
+        </header>
+        <div className="sp-section-body">
+          <div className="sp-action-row">
+            <button
+              type="button"
+              className={"sp-chip" + (petSize === "large" ? " is-active" : "")}
+              disabled={!ready}
+              onClick={() => void handlePetSizeChange("large")}
+            >
+              {t.pet.large}
+            </button>
+            <button
+              type="button"
+              className={"sp-chip" + (petSize === "small" ? " is-active" : "")}
+              disabled={!ready}
+              onClick={() => void handlePetSizeChange("small")}
+            >
+              {t.pet.small}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="sp-section">
+        <header className="sp-section-head">
+          <h3>{t.pet.petCharacter}</h3>
+          <p className="sp-section-hint">{t.pet.petCharacterHint}</p>
+        </header>
+        <div className="sp-section-body">
+          <div className="sp-action-row" style={{ flexWrap: "wrap", gap: "8px" }}>
+            {PET_MODELS.map((model) => (
+              <button
+                key={model.id}
+                type="button"
+                className={"sp-chip" + (selectedModel === model.id ? " is-active" : "")}
+                disabled={!ready}
+                onClick={() => void handleModelChange(model.id)}
+                title={model.description}
+              >
+                {model.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="sp-section">
+        <header className="sp-section-head">
+          <h3>{t.pet.notchLayout}</h3>
+          <p className="sp-section-hint">{t.pet.notchLayoutHint}</p>
         </header>
         <div className="sp-section-body">
           <select
@@ -235,11 +318,8 @@ export function PetPanel() {
 
       <section className="sp-section">
         <header className="sp-section-head">
-          <h3>Target display</h3>
-          <p className="sp-section-hint">
-            Pick which screen Notchi docks onto. Defaults to the current main
-            display.
-          </p>
+          <h3>{t.pet.targetDisplay}</h3>
+          <p className="sp-section-hint">{t.pet.targetDisplayHint}</p>
         </header>
         <div className="sp-section-body">
           <select
@@ -252,18 +332,18 @@ export function PetPanel() {
               )
             }
           >
-            <option value="">Main (follow active display)</option>
+            <option value="">{t.pet.mainDisplay}</option>
             {screens.map((sc) => (
               <option key={sc.id} value={sc.id}>
                 {sc.name}
-                {sc.is_main ? " · main" : ""}
-                {sc.has_notch ? " · notch" : ""} · {Math.round(sc.width)}×
+                {sc.is_main ? ` · ${t.pet.main}` : ""}
+                {sc.has_notch ? ` · ${t.pet.notch}` : ""} · {Math.round(sc.width)}×
                 {Math.round(sc.height)}
               </option>
             ))}
           </select>
           {screens.length === 0 ? (
-            <p className="sp-hint">No additional displays detected.</p>
+            <p className="sp-hint">{t.pet.noDisplays}</p>
           ) : null}
         </div>
       </section>

@@ -84,7 +84,29 @@ bundled third-party asset must be enumerated here.
 - **SPEC reference**: §4 S15 (Live2D resource load failure → static
   PNG degraded render with idle / coding / done variants).
 
-## 4. Runtime libraries (npm)
+## 4. Additional Live2D Sample Models (experimental)
+
+- **Files**:
+  - `public/assets/live2d/haru/**` (~4.2 MB)
+  - `public/assets/live2d/hiyori/**` (~4.7 MB)
+  - `public/assets/live2d/mark/**` (~704 KB)
+  - `public/assets/live2d/natori/**` (~3.4 MB)
+  - `public/assets/live2d/rice/**` (~3.1 MB)
+- **Titles**: Haru, Hiyori, Mark, Natori, and Rice Live2D Cubism sample
+  models.
+- **Copyright / Creator**: Live2D Inc. and/or the creators credited by
+  Live2D's official sample-data distribution.
+- **Source**: Live2D official sample data download page:
+  https://www.live2d.com/en/download/sample-data/
+- **License**: Live2D Free Material License Agreement and the applicable
+  Live2D Cubism Sample Data Terms of Use for each model.
+- **Notes**: These assets are included for local MVP experimentation with
+  multiple animated pet profiles. Before any public release that enables
+  these models, verify each model's current license terms and creator
+  attribution requirements, then replace or remove any model that does not
+  fit the planned distribution channel.
+
+## 5. Runtime libraries (npm)
 
 The following runtime npm dependencies have permissive licenses (MIT,
 ISC, Apache-2.0); their license text is shipped inside `node_modules` and

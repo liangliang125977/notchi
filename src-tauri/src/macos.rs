@@ -16,14 +16,46 @@ use tauri::{LogicalPosition, Runtime, WebviewWindow};
 /// above ordinary application windows but below the menu bar.
 const NS_STATUS_WINDOW_LEVEL: isize = 25;
 
-/// Pet window width (logical pixels) — kept in sync with
-/// `tauri.conf.json`'s `pet` window. SPEC §6.7 D2 pegs the head at
-/// the top ~50% of the 240 px-tall window (i.e. ~120 px of head).
-pub const PET_WINDOW_WIDTH: f64 = 240.0;
+/// Pet window dimension for the "large" size option (logical pixels).
+pub const PET_WINDOW_SIZE_LARGE: f64 = 240.0;
+/// Pet window dimension for the "small" size option (half of large).
+pub const PET_WINDOW_SIZE_SMALL: f64 = 120.0;
 
-/// Pet window height (logical pixels) — kept in sync with
-/// `tauri.conf.json`'s `pet` window.
-pub const PET_WINDOW_HEIGHT: f64 = 240.0;
+/// Legacy aliases kept for callers that haven't been updated yet.
+pub const PET_WINDOW_WIDTH: f64 = PET_WINDOW_SIZE_LARGE;
+pub const PET_WINDOW_HEIGHT: f64 = PET_WINDOW_SIZE_LARGE;
+
+/// User-selectable pet size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PetSize {
+    Large,
+    Small,
+}
+
+impl PetSize {
+    pub fn from_str(value: &str) -> Self {
+        if value == "small" {
+            PetSize::Small
+        } else {
+            PetSize::Large
+        }
+    }
+
+    pub fn dimension(self) -> f64 {
+        match self {
+            PetSize::Large => PET_WINDOW_SIZE_LARGE,
+            PetSize::Small => PET_WINDOW_SIZE_SMALL,
+        }
+    }
+
+    /// Notch overlap for this size, scaled from the large-mode 30 px.
+    fn notch_overlap(self) -> f64 {
+        match self {
+            PetSize::Large => NOTCH_HEAD_OVERLAP_PX,
+            PetSize::Small => NOTCH_HEAD_OVERLAP_PX / 2.0,
+        }
+    }
+}
 
 /// SPEC §4 S19: minimum on-screen margin (logical px) when checking a
 /// remembered window position against the current main screen's
@@ -197,20 +229,22 @@ pub struct ScreenGeometryPublic {
     pub visible_frame: VisibleFrame,
 }
 
-/// Returns true if the 240×240 pet window placed at top-left `(x, y)`
-/// fits entirely inside `target_id`'s visibleFrame (or the main
-/// screen's, when `target_id` is `None`) after applying the SPEC
-/// §4 S19 safety margin.
-pub fn is_pet_window_onscreen_for(target_id: Option<&str>, x: f64, y: f64) -> bool {
+pub fn is_pet_window_onscreen_for_size(
+    target_id: Option<&str>,
+    x: f64,
+    y: f64,
+    pet_size: PetSize,
+) -> bool {
     let Some(geom) = read_screen_geometry(target_id) else {
         return false;
     };
     let vf = geom.visible_frame;
     let m = ONSCREEN_SAFETY_MARGIN_PX;
+    let dim = pet_size.dimension();
     x >= vf.x + m
         && y >= vf.y + m
-        && x + PET_WINDOW_WIDTH <= vf.x + vf.width - m
-        && y + PET_WINDOW_HEIGHT <= vf.y + vf.height - m
+        && x + dim <= vf.x + vf.width - m
+        && y + dim <= vf.y + vf.height - m
 }
 
 /// Convert a "screen-top-left + Y down" coordinate into Tauri's
@@ -236,9 +270,18 @@ fn screen_topleft_to_tauri(x_left: f64, y_top_relative_to_screen: f64) -> (f64, 
 /// `target_screen_id` selects which display to dock into; `None`
 /// means the current main screen.
 pub fn pet_target_position_on<R: Runtime>(
+    window: &WebviewWindow<R>,
+    mode: NotchMode,
+    target_screen_id: Option<&str>,
+) -> tauri::Result<(f64, f64)> {
+    pet_target_position_on_size(window, mode, target_screen_id, PetSize::Large)
+}
+
+pub fn pet_target_position_on_size<R: Runtime>(
     _window: &WebviewWindow<R>,
     mode: NotchMode,
     target_screen_id: Option<&str>,
+    pet_size: PetSize,
 ) -> tauri::Result<(f64, f64)> {
     let Some(geom) = read_screen_geometry(target_screen_id) else {
         return Ok(screen_topleft_to_tauri(0.0, MENUBAR_BUFFER_PX));
@@ -251,9 +294,8 @@ pub fn pet_target_position_on<R: Runtime>(
         NotchMode::ForceNoNotch => false,
     };
 
-    // Cocoa screens form one continuous coordinate space. The chosen
-    // screen's frame.origin.x positions us on the correct display.
-    let x_left = geom.frame_x + ((geom.frame_width - PET_WINDOW_WIDTH) / 2.0).max(0.0);
+    let dim = pet_size.dimension();
+    let x_left = geom.frame_x + ((geom.frame_width - dim) / 2.0).max(0.0);
 
     let y_top = if treat_as_notched {
         let inset = if geom.safe_area_top > 0.0 {
@@ -261,7 +303,7 @@ pub fn pet_target_position_on<R: Runtime>(
         } else {
             geom.menu_bar_height.max(38.0)
         };
-        (inset - NOTCH_HEAD_OVERLAP_PX).max(0.0)
+        (inset - pet_size.notch_overlap()).max(0.0)
     } else {
         geom.menu_bar_height + MENUBAR_BUFFER_PX
     };
@@ -269,13 +311,22 @@ pub fn pet_target_position_on<R: Runtime>(
     Ok(screen_topleft_to_tauri(x_left, y_top))
 }
 
-/// Apply `pet_target_position_on` to the window.
+/// Apply `pet_target_position_on_size` to the window.
 pub fn position_pet_window_on<R: Runtime>(
     window: &WebviewWindow<R>,
     mode: NotchMode,
     target_screen_id: Option<&str>,
 ) -> tauri::Result<()> {
-    let (x, y) = pet_target_position_on(window, mode, target_screen_id)?;
+    position_pet_window_on_size(window, mode, target_screen_id, PetSize::Large)
+}
+
+pub fn position_pet_window_on_size<R: Runtime>(
+    window: &WebviewWindow<R>,
+    mode: NotchMode,
+    target_screen_id: Option<&str>,
+    pet_size: PetSize,
+) -> tauri::Result<()> {
+    let (x, y) = pet_target_position_on_size(window, mode, target_screen_id, pet_size)?;
     window.set_position(LogicalPosition::new(x, y))?;
     Ok(())
 }

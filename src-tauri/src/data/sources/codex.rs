@@ -39,12 +39,16 @@ pub struct CodexAdapter {
     /// no model field of their own). Keyed by `default_session` since
     /// the orchestrator passes the file's session hint on every line.
     last_model: Mutex<std::collections::HashMap<String, String>>,
+    /// Project path from the most recent `session_meta` or `turn_context`
+    /// for this file. Applied to subsequent `token_count` events.
+    last_project_path: Mutex<std::collections::HashMap<String, Option<String>>>,
 }
 
 impl Default for CodexAdapter {
     fn default() -> Self {
         Self {
             last_model: Mutex::new(Default::default()),
+            last_project_path: Mutex::new(Default::default()),
         }
     }
 }
@@ -113,6 +117,14 @@ impl DataSourceAdapter for CodexAdapter {
             "session_meta" => {
                 let meta: SessionMeta = serde_json::from_value(payload).ok()?;
                 let sid = meta.id.unwrap_or_else(|| default_session.to_string());
+                // Persist cwd so subsequent token_count events can carry it.
+                if meta.cwd.is_some() {
+                    let mut guard = self
+                        .last_project_path
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner());
+                    guard.insert(default_session.to_string(), meta.cwd.clone());
+                }
                 Some(ParsedEvent {
                     source: SOURCE,
                     timestamp,
@@ -135,6 +147,14 @@ impl DataSourceAdapter for CodexAdapter {
                         .lock()
                         .unwrap_or_else(|p| p.into_inner());
                     guard.insert(default_session.to_string(), m.to_string());
+                }
+                // turn_context.cwd overrides session_meta.cwd when present.
+                if ctx.cwd.is_some() {
+                    let mut guard = self
+                        .last_project_path
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner());
+                    guard.insert(default_session.to_string(), ctx.cwd.clone());
                 }
                 Some(ParsedEvent {
                     source: SOURCE,
@@ -203,6 +223,13 @@ impl DataSourceAdapter for CodexAdapter {
                             .unwrap_or_else(|p| p.into_inner())
                             .get(default_session)
                             .cloned();
+                        let project_path = self
+                            .last_project_path
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .get(default_session)
+                            .cloned()
+                            .flatten();
                         // Codex `cached_input_tokens` is included in
                         // `input_tokens` rather than reported separately
                         // (unlike Anthropic's split). We mirror it into
@@ -217,7 +244,7 @@ impl DataSourceAdapter for CodexAdapter {
                             source: SOURCE,
                             timestamp,
                             session_id: default_session.to_string(),
-                            project_path: None,
+                            project_path,
                             model,
                             message_id: None,
                             request_id: None,

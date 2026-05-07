@@ -11,12 +11,13 @@ const ACTION_TO_FALLBACK: Record<PetAction, string> = {
   sleep: "/assets/fallback/idle@2x.png",
 };
 
-export function PetFallbackImage() {
+export function PetFallbackImage({ size = 240 }: { size?: number }) {
   const action = usePetStore((s) => s.currentAction);
   const src = ACTION_TO_FALLBACK[action];
   return (
     <img
       className="pet-fallback-img"
+      style={{ width: size, height: size }}
       src={src}
       alt={`Notchi (${action}, fallback render)`}
       draggable={false}

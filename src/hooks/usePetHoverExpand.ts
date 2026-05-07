@@ -4,33 +4,39 @@ import {
   LogicalSize,
   getCurrentWindow,
 } from "@tauri-apps/api/window";
+import { PET_SIZE_LARGE, PET_SIZE_SMALL, type PetSize } from "../stores/petStore";
 
-// SPEC §4 S6 / §5.3 — hover the pet 300ms → window grows to 480×100
-// (pet stays in left 240, capsule fills right 240). Leave → 1s linger
-// → shrink back to 240×240. Window stays anchored to the pet's
-// current top-left corner, so it never drifts under the notch.
+// hover the pet 300ms → window grows downward, info card appears below.
+// Leave → 1s linger → shrink back. Width stays constant.
 
-const COLLAPSED_W = 240;
-const COLLAPSED_H = 240;
-const EXPANDED_W = 480;
-// Increase height slightly so the pet (240) never gets clipped — we
-// keep its Y, the capsule sits in the bottom-right quadrant.
-const EXPANDED_H = 240;
+const CARD_H = 96;
+
+function getSizes(petSize: PetSize) {
+  const pet = petSize === "small" ? PET_SIZE_SMALL : PET_SIZE_LARGE;
+  return {
+    COLLAPSED_W: pet,
+    COLLAPSED_H: pet,
+    EXPANDED_W: pet,
+    EXPANDED_H: pet + CARD_H,
+  };
+}
 
 const ENTER_DELAY_MS = 300;
 const LEAVE_DELAY_MS = 1000;
 
 export interface UsePetHoverExpandOptions {
   rootRef: RefObject<HTMLElement | null>;
+  petSize: PetSize;
 }
 
 interface ExpandResult {
   expanded: boolean;
 }
 
-/** Animates the pet window between 240×240 and 480×240 on hover. */
+/** Animates the pet window between collapsed and expanded sizes on hover. */
 export function usePetHoverExpand({
   rootRef,
+  petSize,
 }: UsePetHoverExpandOptions): ExpandResult {
   const [expanded, setExpanded] = useState(false);
   const enterTimer = useRef<number | null>(null);
@@ -43,6 +49,7 @@ export function usePetHoverExpand({
     if (!el) return;
 
     const win = getCurrentWindow();
+    const { COLLAPSED_W, COLLAPSED_H, EXPANDED_W, EXPANDED_H } = getSizes(petSize);
 
     const clearTimer = (slot: typeof enterTimer) => {
       if (slot.current !== null) {
@@ -137,7 +144,7 @@ export function usePetHoverExpand({
         });
       }
     };
-  }, [rootRef]);
+  }, [rootRef, petSize]);
 
   return { expanded };
 }

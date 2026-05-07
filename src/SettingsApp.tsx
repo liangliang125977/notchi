@@ -6,6 +6,7 @@ import { OverviewPanel } from "./components/OverviewPanel";
 import { SessionsPanel } from "./components/SessionsPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PetPanel } from "./components/PetPanel";
+import { useT } from "./hooks/useT";
 
 const OPEN_SETTINGS_TAB_EVENT = "settings:open-tab";
 // v1.3 hardening — pet window emits this once when macOS denies the
@@ -13,26 +14,20 @@ const OPEN_SETTINGS_TAB_EVENT = "settings:open-tab";
 // user can deep-link to System Settings → Notifications.
 const NOTIFICATIONS_DENIED_EVENT = "pet:notifications-denied";
 
-const TABS: ReadonlyArray<TabItem> = [
-  { id: "overview", label: "Overview" },
-  { id: "sessions", label: "Sessions" },
-  {
-    id: "tokens",
-    label: "Tokens",
-    disabled: true,
-    hint: "Merged into Overview for the MVP",
-  },
-  { id: "pet", label: "Pet" },
-  { id: "settings", label: "Settings" },
-];
-
 interface OpenTabPayload {
   tab?: string;
 }
 
 function SettingsApp() {
+  const t = useT();
+  const TABS: ReadonlyArray<TabItem> = [
+    { id: "overview", label: t.nav.overview },
+    { id: "sessions", label: t.nav.sessions },
+    { id: "pet", label: t.nav.pet },
+    { id: "settings", label: t.nav.settings },
+  ];
+
   const [active, setActive] = useState<string>("overview");
-  const [highlightBudget, setHighlightBudget] = useState(false);
   const [notifDenied, setNotifDenied] = useState(false);
 
   useEffect(() => {
@@ -45,10 +40,7 @@ function SettingsApp() {
             const next = event.payload?.tab;
             if (typeof next === "string") {
               const allowed = TABS.find((t) => t.id === next && !t.disabled);
-              if (allowed) {
-                setActive(next);
-                if (next === "settings") setHighlightBudget(true);
-              }
+              if (allowed) setActive(next);
             }
           },
         );
@@ -77,29 +69,16 @@ function SettingsApp() {
     };
   }, []);
 
-  // Reset the highlight flag once the user moves away from settings.
-  // Wrapped in a microtask so the lint rule doesn't see a synchronous
-  // setState call from inside the effect body.
-  useEffect(() => {
-    if (active === "settings" || !highlightBudget) return;
-    const id = window.setTimeout(() => setHighlightBudget(false), 0);
-    return () => window.clearTimeout(id);
-  }, [active, highlightBudget]);
-
   return (
     <main className="settings-window">
       <header className="settings-window-head">
-        <h1>Notchi</h1>
-        <p className="settings-window-sub">
-          Local-only AI coding companion · v0.1.0
-        </p>
+        <h1>{t.app.title}</h1>
+        <p className="settings-window-sub">{t.app.subtitle}</p>
       </header>
 
       {notifDenied ? (
         <div className="settings-banner-warn" role="status">
-          <span className="settings-banner-warn-text">
-            ⚠️ macOS 通知权限被拒。任务完成时不会发送系统通知（气泡仍工作）。
-          </span>
+          <span className="settings-banner-warn-text">{t.notif.denied}</span>
           <button
             className="settings-banner-warn-btn"
             type="button"
@@ -107,12 +86,12 @@ function SettingsApp() {
               void invoke("open_macos_notifications_settings");
             }}
           >
-            打开系统设置
+            {t.notif.openSettings}
           </button>
           <button
             className="settings-banner-warn-dismiss"
             type="button"
-            aria-label="dismiss"
+            aria-label={t.notif.dismiss}
             onClick={() => setNotifDenied(false)}
           >
             ×
@@ -124,12 +103,7 @@ function SettingsApp() {
 
       <div className="settings-window-body">
         <TabPanel id="overview" active={active}>
-          <OverviewPanel
-            onJumpToBudget={() => {
-              setActive("settings");
-              setHighlightBudget(true);
-            }}
-          />
+          <OverviewPanel />
         </TabPanel>
         <TabPanel id="sessions" active={active}>
           <SessionsPanel />
@@ -138,7 +112,7 @@ function SettingsApp() {
           <PetPanel />
         </TabPanel>
         <TabPanel id="settings" active={active}>
-          <SettingsPanel highlightBudget={highlightBudget} />
+          <SettingsPanel />
         </TabPanel>
       </div>
     </main>

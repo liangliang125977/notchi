@@ -6,15 +6,8 @@ export function formatTokens(n: number): string {
   if (!Number.isFinite(n)) return "—";
   const abs = Math.abs(n);
   if (abs < 1000) return `${Math.round(n)}`;
-  if (abs < 1_000_000) return `${(n / 1000).toFixed(abs < 10_000 ? 1 : 1)}K`;
+  if (abs < 1_000_000) return `${(n / 1000).toFixed(abs < 10_000 ? 1 : 0)}K`;
   return `${(n / 1_000_000).toFixed(abs < 10_000_000 ? 2 : 1)}M`;
-}
-
-export function formatCost(usdString: string | number): string {
-  const n =
-    typeof usdString === "string" ? Number.parseFloat(usdString) : usdString;
-  if (!Number.isFinite(n)) return "$0.00";
-  return `$${n.toFixed(2)}`;
 }
 
 export function formatModel(model: string | null | undefined): string {
@@ -127,4 +120,17 @@ export function modelFamily(model: string | null | undefined): ModelFamily {
 export function todayDateLabel(): string {
   const d = new Date();
   return d.toISOString().slice(0, 10);
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  codex: "Codex",
+  cursor: "Cursor",
+  opencode: "OpenCode",
+};
+
+export function formatSource(s: string | null | undefined): string {
+  if (!s) return "—";
+  return SOURCE_LABELS[s.toLowerCase()] ?? s;
 }

@@ -67,10 +67,14 @@ pub async fn token_summary(pool: &SqlitePool, period: Period) -> Result<TokenSum
     let (i, o, cr, cc, cost, sessions): (i64, i64, i64, i64, f64, i64) =
         sqlx::query_as(&sql).fetch_one(pool).await?;
 
+    // Include cache tokens so a heavily-cached Claude session is not
+    // ranked below a non-cached model. cache_read represents actual
+    // context processed by the model on behalf of the user.
     let dom_sql = format!(
         "SELECT model FROM events WHERE timestamp >= {lb}
          GROUP BY model
-         ORDER BY SUM(input_tokens + output_tokens) DESC
+         ORDER BY SUM(input_tokens + output_tokens
+                      + cache_read_input_tokens + cache_creation_input_tokens) DESC
          LIMIT 1"
     );
     let dominant: Option<(String,)> = sqlx::query_as(&dom_sql).fetch_optional(pool).await?;
@@ -105,7 +109,8 @@ pub async fn token_timeseries(
     };
     let sql = format!(
         "SELECT {bucket_expr} AS bucket,
-                COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
+                COALESCE(SUM(input_tokens + output_tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens,
                 COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost
          FROM events
          WHERE timestamp >= {lb}
@@ -137,15 +142,39 @@ pub async fn token_by_model(pool: &SqlitePool, period: Period) -> Result<Vec<Gro
     group_by(pool, period, "model").await
 }
 
+pub async fn token_by_project(pool: &SqlitePool, period: Period) -> Result<Vec<GroupRow>, sqlx::Error> {
+    let lb = period.lower_bound_sql();
+    // Use COALESCE to bucket NULL project_path as "(unknown)".
+    let sql = format!(
+        "SELECT COALESCE(project_path, '(unknown)') AS key,
+                COALESCE(SUM(input_tokens + output_tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens
+         FROM events WHERE timestamp >= {lb}
+         GROUP BY project_path ORDER BY tokens DESC"
+    );
+    let rows: Vec<(String, i64)> = sqlx::query_as(&sql).fetch_all(pool).await?;
+    let total: i64 = rows.iter().map(|(_, t)| *t).sum();
+    Ok(rows
+        .into_iter()
+        .map(|(k, t)| GroupRow {
+            key: k,
+            tokens: t,
+            percentage: if total > 0 { (t as f64) * 100.0 / (total as f64) } else { 0.0 },
+        })
+        .collect())
+}
+
 async fn group_by(
     pool: &SqlitePool,
     period: Period,
     col: &str,
 ) -> Result<Vec<GroupRow>, sqlx::Error> {
     let lb = period.lower_bound_sql();
+    // Include cache tokens so heavily-cached models/sources rank correctly.
     let sql = format!(
         "SELECT {col} AS key,
-                COALESCE(SUM(input_tokens + output_tokens),0) AS tokens
+                COALESCE(SUM(input_tokens + output_tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens
          FROM events WHERE timestamp >= {lb}
          GROUP BY {col} ORDER BY tokens DESC"
     );
@@ -169,6 +198,7 @@ pub struct SessionRow {
     pub cost_usd: String,
     pub model: String,
     pub project_path: Option<String>,
+    pub source: String,
 }
 
 /// Returns sessions whose first event falls inside `period`. A
@@ -189,16 +219,22 @@ pub async fn recent_sessions_in(
                 tokens,
                 cost,
                 model,
-                project_path
+                project_path,
+                source
          FROM (
             SELECT session_id,
                    MIN(timestamp) AS started_at,
-                   COALESCE(SUM(input_tokens + output_tokens),0) AS tokens,
+                   COALESCE(SUM(input_tokens + output_tokens
+                                + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens,
                    COALESCE(SUM(CAST(cost_usd AS REAL)),0.0) AS cost,
                    (SELECT model FROM events e2 WHERE e2.session_id = e1.session_id
-                    GROUP BY model ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1) AS model,
+                    GROUP BY model ORDER BY SUM(input_tokens + output_tokens
+                                               + cache_read_input_tokens + cache_creation_input_tokens) DESC LIMIT 1) AS model,
                    (SELECT project_path FROM events e3 WHERE e3.session_id = e1.session_id
-                    AND project_path IS NOT NULL LIMIT 1) AS project_path
+                    AND project_path IS NOT NULL LIMIT 1) AS project_path,
+                   (SELECT source FROM events e4 WHERE e4.session_id = e1.session_id
+                    GROUP BY source ORDER BY SUM(input_tokens + output_tokens
+                                                + cache_read_input_tokens + cache_creation_input_tokens) DESC LIMIT 1) AS source
             FROM events e1
             GROUP BY session_id
          )
@@ -206,17 +242,18 @@ pub async fn recent_sessions_in(
          ORDER BY started_at DESC
          LIMIT ?1"
     );
-    let rows: Vec<(String, String, i64, f64, String, Option<String>)> =
+    let rows: Vec<(String, String, i64, f64, String, Option<String>, String)> =
         sqlx::query_as(&sql).bind(limit).fetch_all(pool).await?;
     Ok(rows
         .into_iter()
-        .map(|(s, st, t, c, m, p)| SessionRow {
+        .map(|(s, st, t, c, m, p, src)| SessionRow {
             session_id: s,
             started_at: st,
             total_tokens: t,
             cost_usd: format!("{c:.4}"),
             model: m,
             project_path: p,
+            source: src,
         })
         .collect())
 }

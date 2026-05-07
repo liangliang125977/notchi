@@ -71,6 +71,9 @@ tmp/
 # Claude Code worktrees (sub-agent isolated workspaces)
 .claude/worktrees/
 
+# Superpowers local brainstorming companion state
+.superpowers/
+
 # Coverage / Test artifacts
 coverage/
 *.lcov

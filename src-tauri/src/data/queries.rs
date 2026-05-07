@@ -67,10 +67,14 @@ pub async fn token_summary(pool: &SqlitePool, period: Period) -> Result<TokenSum
     let (i, o, cr, cc, cost, sessions): (i64, i64, i64, i64, f64, i64) =
         sqlx::query_as(&sql).fetch_one(pool).await?;
 
+    // Include cache tokens so a heavily-cached Claude session is not
+    // ranked below a non-cached model. cache_read represents actual
+    // context processed by the model on behalf of the user.
     let dom_sql = format!(
         "SELECT model FROM events WHERE timestamp >= {lb}
          GROUP BY model
-         ORDER BY SUM(input_tokens + output_tokens) DESC
+         ORDER BY SUM(input_tokens + output_tokens
+                      + cache_read_input_tokens + cache_creation_input_tokens) DESC
          LIMIT 1"
     );
     let dominant: Option<(String,)> = sqlx::query_as(&dom_sql).fetch_optional(pool).await?;
@@ -142,7 +146,8 @@ pub async fn token_by_project(pool: &SqlitePool, period: Period) -> Result<Vec<G
     // Use COALESCE to bucket NULL project_path as "(unknown)".
     let sql = format!(
         "SELECT COALESCE(project_path, '(unknown)') AS key,
-                COALESCE(SUM(input_tokens + output_tokens),0) AS tokens
+                COALESCE(SUM(input_tokens + output_tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens
          FROM events WHERE timestamp >= {lb}
          GROUP BY project_path ORDER BY tokens DESC"
     );
@@ -164,9 +169,11 @@ async fn group_by(
     col: &str,
 ) -> Result<Vec<GroupRow>, sqlx::Error> {
     let lb = period.lower_bound_sql();
+    // Include cache tokens so heavily-cached models/sources rank correctly.
     let sql = format!(
         "SELECT {col} AS key,
-                COALESCE(SUM(input_tokens + output_tokens),0) AS tokens
+                COALESCE(SUM(input_tokens + output_tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens
          FROM events WHERE timestamp >= {lb}
          GROUP BY {col} ORDER BY tokens DESC"
     );

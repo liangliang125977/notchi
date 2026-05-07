@@ -5,6 +5,9 @@
 //! The collection-pause callback is intentionally a no-op; data
 //! collection itself lands in T2.x.
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Runtime};
@@ -13,6 +16,13 @@ const MENU_ABOUT: &str = "about_notchi";
 const MENU_TOGGLE_PET: &str = "toggle_pet";
 const MENU_PAUSE_COLLECTION: &str = "pause_collection";
 const MENU_QUIT: &str = "quit";
+
+// Self-tracked visibility — more reliable than querying is_visible() on
+// macOS where the answer can lag behind the actual compositor state.
+static SETTINGS_SHOWN: AtomicBool = AtomicBool::new(false);
+// Timestamp (ms since epoch) of the last show(). Used to debounce rapid
+// double-fires of the Down event that macOS occasionally emits.
+static LAST_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
 
 pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let menu = build_menu(app)?;
@@ -29,9 +39,6 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| handle_menu_event(app, &event))
         .on_tray_icon_event(|tray, event| {
-            // Use Down instead of Up: on macOS the Up event is unreliable
-            // when the settings window already holds focus (NSStatusItem
-            // swallows the Up event after the app activates).
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Down,
@@ -44,6 +51,13 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -87,15 +101,38 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
     }
 }
 
+/// Toggle the settings window open/closed.
+///
+/// macOS quirks addressed here:
+///
+/// 1. `is_visible()` can lag — we track our own `SETTINGS_SHOWN` flag.
+/// 2. The NSStatusItem Down event occasionally fires twice in rapid
+///    succession — we ignore a second call within 300 ms.
+/// 3. `unminimize()` is called before `show()` in case the window was
+///    dragged to a corner and minimised.
+pub fn mark_settings_hidden() {
+    SETTINGS_SHOWN.store(false, Ordering::Relaxed);
+}
+
 fn toggle_settings_window<R: Runtime>(app: &AppHandle<R>) {
+    // Debounce: ignore if toggled less than 300 ms ago.
+    let now = now_ms();
+    let last = LAST_TOGGLE_MS.load(Ordering::Relaxed);
+    if now.saturating_sub(last) < 300 {
+        return;
+    }
+    LAST_TOGGLE_MS.store(now, Ordering::Relaxed);
+
     let Some(window) = app.get_webview_window("settings") else {
         return;
     };
 
-    let visible = window.is_visible().unwrap_or(false);
-    if visible {
+    if SETTINGS_SHOWN.load(Ordering::Relaxed) {
+        SETTINGS_SHOWN.store(false, Ordering::Relaxed);
         let _ = window.hide();
     } else {
+        SETTINGS_SHOWN.store(true, Ordering::Relaxed);
+        let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
     }

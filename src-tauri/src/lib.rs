@@ -246,6 +246,18 @@ pub fn run() {
 
             tray::install(app.handle())?;
 
+            // Keep SETTINGS_SHOWN in sync when the window is closed via the
+            // title-bar X button (CloseRequested is emitted before destroy).
+            if let Some(settings_win) = app.get_webview_window("settings") {
+                settings_win.on_window_event(|event| {
+                    if let tauri::WindowEvent::CloseRequested { .. }
+                    | tauri::WindowEvent::Destroyed = event
+                    {
+                        tray::mark_settings_hidden();
+                    }
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

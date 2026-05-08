@@ -144,6 +144,52 @@ fn mood_for(level: i32) -> &'static str {
     }
 }
 
+/// Order moods worst → best. Used by `fuse_mood` to take the
+/// pessimistic min of two signals.
+fn mood_rank(m: &str) -> u8 {
+    match m {
+        "hungry" => 0,
+        "content" => 1,
+        "happy" => 2,
+        _ => 1, // unknown → neutral
+    }
+}
+
+fn cache_mood_for(hit_pct: f64) -> &'static str {
+    if hit_pct >= 90.0 {
+        "happy"
+    } else if hit_pct >= 70.0 {
+        "content"
+    } else {
+        "hungry"
+    }
+}
+
+/// Fuse feed-derived mood with cache-pulse mood, taking the worse of
+/// the two. Returns `feed_mood` unchanged when there are not enough
+/// recent samples to trust the cache signal (avoids cold-start
+/// false alarms).
+pub(crate) fn fuse_mood(
+    feed_mood: &str,
+    cache: &crate::data::queries::CachePulse,
+) -> &'static str {
+    // Canonicalise feed_mood to one of the three known strings.
+    let fm: &'static str = match feed_mood {
+        "hungry" => "hungry",
+        "happy" => "happy",
+        _ => "content",
+    };
+    if cache.samples < 5 {
+        return fm;
+    }
+    let cm = cache_mood_for(cache.hit_pct);
+    if mood_rank(cm) < mood_rank(fm) {
+        cm
+    } else {
+        fm
+    }
+}
+
 fn read_feed(app: &AppHandle) -> (i32, Option<String>, Vec<FeedLogEntry>) {
     let Ok(store) = app.store(SETTINGS_STORE) else {
         return (0, None, Vec::new());
@@ -217,9 +263,18 @@ pub async fn pet_status(
     let now = Utc::now();
     let level = apply_decay(stored_level, fed_at.as_deref(), now);
 
+    // Cache discipline pulse — a hungry pet on a 30% cache hit rate is
+    // an early warning that something just blew the prompt cache.
+    let pulse = crate::data::queries::cache_pulse_1h(&state.pool)
+        .await
+        .unwrap_or(crate::data::queries::CachePulse {
+            hit_pct: 100.0,
+            samples: 0,
+        });
+
     Ok(PetStatus {
         feed_level: level.clamp(0, FEED_MAX) as u8,
-        mood: mood_for(level).to_string(),
+        mood: fuse_mood(mood_for(level), &pulse).to_string(),
         fed_at,
         evolution,
         recent_feeds,
@@ -260,9 +315,15 @@ pub async fn record_feed(
     let total = cumulative_tokens(&state.pool)
         .await
         .map_err(|e| e.to_string())?;
+    let pulse = crate::data::queries::cache_pulse_1h(&state.pool)
+        .await
+        .unwrap_or(crate::data::queries::CachePulse {
+            hit_pct: 100.0,
+            samples: 0,
+        });
     Ok(PetStatus {
         feed_level: next as u8,
-        mood: mood_for(next).to_string(),
+        mood: fuse_mood(mood_for(next), &pulse).to_string(),
         fed_at: Some(now_iso),
         evolution: evolution_for_tokens(total),
         recent_feeds: log,
@@ -336,5 +397,30 @@ mod tests {
         assert_eq!(mood_for(69), "content");
         assert_eq!(mood_for(70), "happy");
         assert_eq!(mood_for(100), "happy");
+    }
+
+    #[test]
+    fn fuse_mood_truth_table() {
+        use crate::data::queries::CachePulse;
+        let p = |pct: f64, samples: i64| CachePulse { hit_pct: pct, samples };
+
+        // Below sample threshold → cache ignored, feed_mood passes through
+        assert_eq!(fuse_mood("happy", &p(10.0, 4)), "happy");
+        assert_eq!(fuse_mood("hungry", &p(99.0, 4)), "hungry");
+
+        // Cache happy + feed happy → happy
+        assert_eq!(fuse_mood("happy", &p(95.0, 50)), "happy");
+
+        // Cache hungry overrides feed happy → hungry
+        assert_eq!(fuse_mood("happy", &p(40.0, 50)), "hungry");
+
+        // Feed hungry overrides cache happy → hungry
+        assert_eq!(fuse_mood("hungry", &p(95.0, 50)), "hungry");
+
+        // Both content → content
+        assert_eq!(fuse_mood("content", &p(80.0, 50)), "content");
+
+        // Cache content + feed happy → content (take the worse of the two)
+        assert_eq!(fuse_mood("happy", &p(80.0, 50)), "content");
     }
 }

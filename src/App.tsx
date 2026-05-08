@@ -10,6 +10,7 @@ import { PetBubble } from "./components/PetBubble";
 import { EvolutionBurst } from "./components/EvolutionBurst";
 import { SubagentDots } from "./components/SubagentDots";
 import { BurnRateOverlay } from "./components/BurnRateOverlay";
+import { PetExpressionLayer } from "./components/PetExpressionLayer";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
 import { useColorTone } from "./hooks/useColorTone";
@@ -138,6 +139,7 @@ function App() {
           : <PetFallbackImage size={petDim} />}
         <SubagentDots subagents={subagents} />
         <BurnRateOverlay />
+        <PetExpressionLayer />
       </div>
       <L2Capsule visible={expanded} />
       <PetBubble />

@@ -134,3 +134,19 @@ export function formatSource(s: string | null | undefined): string {
   if (!s) return "—";
   return SOURCE_LABELS[s.toLowerCase()] ?? s;
 }
+
+/** Format a percentage with one decimal — e.g. 96.4%. */
+export function formatPercent(p: number | null | undefined): string {
+  if (p === null || p === undefined || !Number.isFinite(p)) return "—";
+  return `${p.toFixed(1)}%`;
+}
+
+/** Format a savings amount as ~$X (tilde flags it as an estimate). */
+export function formatSavings(usd: string | null | undefined): string {
+  if (!usd) return "—";
+  const n = parseFloat(usd);
+  if (!Number.isFinite(n)) return "—";
+  if (n < 0.01) return "$0";
+  if (n < 100) return `~$${n.toFixed(2)}`;
+  return `~$${Math.round(n)}`;
+}

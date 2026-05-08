@@ -362,3 +362,29 @@ pub async fn install<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Dat
 
     Ok(DataState { pool, status, rescan, sessions })
 }
+
+#[tauri::command]
+pub async fn burn_rate_now(
+    app: tauri::AppHandle,
+    state: State<'_, DataState>,
+) -> Result<crate::data::burn_rate::BurnRate, String> {
+    let budget = read_monthly_budget(&app);
+    crate::data::burn_rate::burn_rate_now(&state.pool, budget)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+fn read_monthly_budget(app: &tauri::AppHandle) -> f64 {
+    app.store("settings.json")
+        .ok()
+        .and_then(|s| s.get("monthlyBudgetUsd"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(50.0)
+}
+
+#[tauri::command]
+pub async fn set_monthly_budget(app: tauri::AppHandle, usd: f64) -> Result<(), String> {
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    store.set("monthlyBudgetUsd", serde_json::Value::from(usd));
+    Ok(())
+}

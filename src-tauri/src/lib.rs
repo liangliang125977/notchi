@@ -23,6 +23,8 @@ const WINDOW_POSITION_KEY: &str = "windowPosition";
 const TARGET_SCREEN_ID_KEY: &str = "targetScreenId";
 /// User-selected pet size: "large" (240) or "small" (120). Default "large".
 const PET_SIZE_KEY: &str = "petSize";
+/// Plan #2 — monthly USD budget used to derive burn-rate runway.
+const MONTHLY_BUDGET_KEY: &str = "monthlyBudgetUsd";
 
 /// SPEC §6.7 D4 — frontend asks Rust for the current default pet
 /// position so it can compute the snap distance with the same numbers
@@ -199,6 +201,8 @@ pub fn run() {
             data::commands::set_claude_code_data_dir,
             data::commands::clear_all_events,
             data::commands::rescan_now,
+            data::commands::burn_rate_now,
+            data::commands::set_monthly_budget,
             data::evolution::evolution_status,
             data::evolution::pet_status,
             data::evolution::record_feed,

@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 mod data;
+mod hooks;
 #[cfg(target_os = "macos")]
 mod macos;
 mod tray;

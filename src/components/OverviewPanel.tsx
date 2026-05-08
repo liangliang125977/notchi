@@ -11,7 +11,9 @@ import type {
 import { GrowthSection } from "./GrowthSection";
 import {
   formatModel,
+  formatPercent,
   formatPercentDelta,
+  formatSavings,
   formatSource,
   formatTimeHM,
   formatTokens,
@@ -184,6 +186,7 @@ export function OverviewPanel() {
           value={formatModel(s.summary?.dominant_model ?? null)}
           mono={false}
         />
+        <CacheCard summary={s.summary} t={t} />
       </div>
 
       <section className="ov-section">
@@ -304,6 +307,48 @@ function Card({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function CacheCard({
+  summary,
+  t,
+}: {
+  summary: TokenSummary | null;
+  t: ReturnType<typeof useT>;
+}) {
+  if (!summary) {
+    return (
+      <div className="ov-card">
+        <span className="ov-card-label">{t.overview.cacheEfficiency}</span>
+        <span className="ov-card-value is-mono">—</span>
+      </div>
+    );
+  }
+  // Weighted hit rate: cache_read / (input + cache_read + cache_creation).
+  const totalForHit =
+    summary.total_input + summary.total_cache_read + summary.total_cache_creation;
+  const hitPct = totalForHit > 0 ? (summary.total_cache_read * 100) / totalForHit : 0;
+
+  return (
+    <div className="ov-card">
+      <span className="ov-card-label">{t.overview.cacheEfficiency}</span>
+      <span className="ov-card-value is-mono">{formatPercent(hitPct)}</span>
+      <div className="ov-card-sub">
+        <span className="ov-card-sub-row">
+          <span className="ov-card-sub-label">{t.overview.cacheSaved}</span>
+          <span className="ov-card-sub-value">
+            {formatSavings(summary.cache_savings_usd)}
+          </span>
+        </span>
+        <span className="ov-card-sub-row">
+          <span className="ov-card-sub-label">{t.overview.cacheReads}</span>
+          <span className="ov-card-sub-value">
+            {formatTokens(summary.total_cache_read)}
+          </span>
+        </span>
+      </div>
     </div>
   );
 }

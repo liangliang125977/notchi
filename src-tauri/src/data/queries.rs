@@ -354,3 +354,36 @@ pub async fn upsert_pricing(pool: &SqlitePool, e: &PricingEntry) -> Result<(), s
     .await?;
     Ok(())
 }
+
+/// 1-hour rolling cache hit-rate snapshot. Used by `pet_status` to
+/// fuse cache discipline into pet mood. Intentionally NOT exposed via
+/// a Tauri command — the period-aware `cache_hit_pct` on `GroupRow`
+/// covers the UI need; this one is a tighter window for the live
+/// emotional pulse.
+#[derive(Debug, Clone, Copy)]
+pub struct CachePulse {
+    pub hit_pct: f64,
+    pub samples: i64,
+}
+
+pub async fn cache_pulse_1h(pool: &SqlitePool) -> Result<CachePulse, sqlx::Error> {
+    let row: (i64, i64, i64) = sqlx::query_as(
+        "SELECT
+            COALESCE(SUM(cache_read_input_tokens), 0),
+            COALESCE(SUM(input_tokens + cache_read_input_tokens
+                         + cache_creation_input_tokens), 0),
+            COUNT(*)
+         FROM events
+         WHERE timestamp >= datetime('now', '-1 hour')",
+    )
+    .fetch_one(pool)
+    .await?;
+    let (cache_read, total_for_hit, samples) = row;
+    let hit_pct = if total_for_hit > 0 {
+        (cache_read as f64) * 100.0 / (total_for_hit as f64)
+    } else {
+        // No cache-relevant traffic in the last hour → don't penalise.
+        100.0
+    };
+    Ok(CachePulse { hit_pct, samples })
+}

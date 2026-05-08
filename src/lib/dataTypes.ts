@@ -55,6 +55,17 @@ export type SessionRow = {
   source: string;
 };
 
+/** v0.2 #1 — a Claude Code subagent with recent activity. */
+export type ActiveSubagent = {
+  agent_id: string;
+  parent_session_id: string | null;
+  model: string | null;
+  total_tokens: number;
+  last_seen_iso: string;
+  /** True iff jsonl had a write within the last 60 seconds. */
+  is_alive: boolean;
+};
+
 export type SettingsBundle = {
   claude_code_data_dir: string | null;
   claude_code_found: boolean;

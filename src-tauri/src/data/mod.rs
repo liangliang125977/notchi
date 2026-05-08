@@ -21,6 +21,7 @@ pub mod queries;
 pub mod sessions;
 pub mod sources;
 pub mod species;
+pub mod subagents;
 
 use std::sync::Arc;
 

@@ -1,0 +1,30 @@
+.subagent-dots {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.subagent-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  transition: background-color 400ms;
+  animation: subagent-fade-in 400ms ease-out;
+}
+
+@keyframes subagent-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) translate(0, 0);
+  }
+  to {
+    opacity: 1;
+  }
+}

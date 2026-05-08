@@ -8,12 +8,14 @@ import { L2Capsule } from "./components/L2Capsule";
 import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
 import { EvolutionBurst } from "./components/EvolutionBurst";
+import { SubagentDots } from "./components/SubagentDots";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
 import { useColorTone } from "./hooks/useColorTone";
 import { usePetHoverExpand } from "./hooks/usePetHoverExpand";
 import { useEmotionEngine } from "./hooks/useEmotionEngine";
 import { usePetStatus, type EvolutionStage } from "./hooks/usePetStatus";
+import { useSubagents } from "./hooks/useSubagents";
 import { usePetStore, PET_SIZE_SMALL, PET_MODEL_CHANGED_EVENT, SELECTED_MODEL_KEY, type PetSize } from "./stores/petStore";
 import { getModelById } from "./lib/petModels";
 
@@ -102,6 +104,7 @@ function App() {
   } = usePetStatus();
   const stageOutline = stageFilter(petStatus?.evolution.stage);
   const composedFilter = [filter, stageOutline].filter(Boolean).join(" ");
+  const subagents = useSubagents();
 
   const showBubble = usePetStore((s) => s.showBubble);
   const setAction = usePetStore((s) => s.setAction);
@@ -132,6 +135,7 @@ function App() {
         {renderMode === "live2d"
           ? <PetCanvas key={`${petSize}-${selectedModelId}`} size={petDim} modelUrl={currentModel.modelPath} actionMotions={currentModel.actionMotions} />
           : <PetFallbackImage size={petDim} />}
+        <SubagentDots subagents={subagents} />
       </div>
       <L2Capsule visible={expanded} />
       <PetBubble />

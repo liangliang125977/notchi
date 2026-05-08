@@ -111,6 +111,10 @@ pub async fn init_pool(db_file: &Path) -> Result<SqlitePool, sqlx::Error> {
         .await?;
 
     sqlx::query(SCHEMA_SQL).execute(&pool).await?;
+    // v0.2 migration: agent_id / parent_session_id were added after
+    // v0.1.0 shipped. CREATE TABLE IF NOT EXISTS above handles fresh
+    // installs; the ALTER calls below cover users upgrading from a
+    // database created by v0.1.0.
     add_column_if_missing(&pool, "events", "agent_id", "TEXT").await?;
     add_column_if_missing(&pool, "events", "parent_session_id", "TEXT").await?;
     sqlx::query(
@@ -120,6 +124,12 @@ pub async fn init_pool(db_file: &Path) -> Result<SqlitePool, sqlx::Error> {
     Ok(pool)
 }
 
+/// Add a column only when it does not already exist. SQLite has no
+/// `ADD COLUMN IF NOT EXISTS`, so we PRAGMA-check first.
+///
+/// **Callers must pass trusted hardcoded literals** for `table`,
+/// `column`, and `type_decl` — SQLite has no parameter binding for
+/// identifiers, so the values are interpolated directly into SQL.
 async fn add_column_if_missing(
     pool: &SqlitePool,
     table: &str,

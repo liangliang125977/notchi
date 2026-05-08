@@ -19,6 +19,7 @@ export function SettingsPanel() {
   const [dirInput, setDirInput] = useState<string>("");
   const [muteFrom, setMuteFrom] = useState<string>(DEFAULT_MUTE_FROM);
   const [muteTo, setMuteTo] = useState<string>(DEFAULT_MUTE_TO);
+  const [budget, setBudget] = useState<number>(50);
   const [savingDir, setSavingDir] = useState(false);
   const [dirErr, setDirErr] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -36,6 +37,16 @@ export function SettingsPanel() {
       setDirInput(b.claude_code_data_dir ?? "");
       setMuteFrom(b.mute_window_start ?? DEFAULT_MUTE_FROM);
       setMuteTo(b.mute_window_end ?? DEFAULT_MUTE_TO);
+      // Load monthly budget from a separate settings command since it
+      // is not part of the existing SettingsBundle shape (added v0.2).
+      try {
+        const br = await invoke<{ usd_budget_month: number }>("burn_rate_now");
+        if (br && typeof br.usd_budget_month === "number") {
+          setBudget(br.usd_budget_month);
+        }
+      } catch {
+        /* burn_rate_now may fail on cold start; default 50 stays */
+      }
     } catch (err) {
       console.error("[settings] reload failed", err);
     }
@@ -69,6 +80,15 @@ export function SettingsPanel() {
       setDirErr(String(err));
     } finally {
       setSavingDir(false);
+    }
+  }
+
+  async function handleSaveBudget() {
+    try {
+      await invoke("set_monthly_budget", { usd: budget });
+      flash(t.settings.monthlyBudgetSaved);
+    } catch (err) {
+      console.error("[settings] save budget", err);
     }
   }
 
@@ -185,6 +205,31 @@ export function SettingsPanel() {
             type="button"
             className="sp-btn"
             onClick={() => void handleSaveMute()}
+          >
+            {t.settings.save}
+          </button>
+        </div>
+      </Section>
+
+      <Section
+        title={t.settings.monthlyBudget}
+        hint={t.settings.monthlyBudgetHint}
+      >
+        <div className="sp-row">
+          <input
+            type="number"
+            min="0"
+            step="5"
+            className="sp-input"
+            style={{ width: 120 }}
+            value={budget}
+            onChange={(e) => setBudget(Number(e.target.value) || 0)}
+          />
+          <span className="sp-input-prefix">USD</span>
+          <button
+            type="button"
+            className="sp-btn"
+            onClick={() => void handleSaveBudget()}
           >
             {t.settings.save}
           </button>

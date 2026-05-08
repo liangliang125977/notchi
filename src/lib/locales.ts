@@ -89,6 +89,9 @@ export interface Strings {
     to: string;
     save: string;
     quietHoursSaved: string;
+    monthlyBudget: string;
+    monthlyBudgetHint: string;
+    monthlyBudgetSaved: string;
     dangerZone: string;
     dangerZoneHint: string;
     clearAll: string;
@@ -227,6 +230,10 @@ export const en: Strings = {
     to: "To",
     save: "Save",
     quietHoursSaved: "Quiet hours saved.",
+    monthlyBudget: "Monthly budget (USD)",
+    monthlyBudgetHint:
+      "The pet gets agitated when projected month-end spend approaches this amount.",
+    monthlyBudgetSaved: "Monthly budget saved.",
     dangerZone: "Danger zone",
     dangerZoneHint:
       "Wipes the local events table. Notchi will rebuild from existing jsonl files automatically.",
@@ -366,6 +373,10 @@ export const zh: Strings = {
     to: "到",
     save: "保存",
     quietHoursSaved: "免打扰时段已保存。",
+    monthlyBudget: "月度预算（USD）",
+    monthlyBudgetHint:
+      "当月底预测花费接近此数字时，宠物会进入警觉状态。",
+    monthlyBudgetSaved: "月度预算已保存。",
     dangerZone: "危险操作",
     dangerZoneHint: "清空本地事件表。Notchi 会自动从现有 jsonl 文件重建。",
     clearAll: "清除所有数据…",

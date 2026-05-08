@@ -1,0 +1,18 @@
+{
+  "id": "coder-buddy",
+  "name": "Coder Buddy",
+  "description": "Lottie animation · designer at the laptop",
+  "engine": "lottie",
+  "actions": {
+    "idle":    { "src": "idle.json", "loop": true },
+    "coding":  { "src": "idle.json", "loop": true },
+    "waiting": { "src": "idle.json", "loop": true },
+    "done":    { "src": "idle.json", "loop": false },
+    "sleep":   { "src": "idle.json", "loop": true }
+  },
+  "credits": {
+    "author": "LottieFiles community",
+    "license": "Free for personal and commercial use (attribution appreciated)",
+    "sourceUrl": "https://assets10.lottiefiles.com/packages/lf20_fcfjwiyb.json"
+  }
+}

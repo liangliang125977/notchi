@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Blob Buddy · idle pose
+  CC0 — drawn by hand for the Notchi project.
+  Soft blob with breathing animation and blinking eyes. Renders as a
+  regular <img> so the SpriteEngine can pick it up the same way it
+  handles GIF/APNG.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <radialGradient id="body" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#9ec5ff"/>
+      <stop offset="100%" stop-color="#4a90e2"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.18)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </radialGradient>
+  </defs>
+
+  <!-- soft ground shadow -->
+  <ellipse cx="120" cy="200" rx="58" ry="9" fill="url(#shadow)">
+    <animate attributeName="rx" values="58;52;58" dur="3.6s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.85;0.65;0.85" dur="3.6s" repeatCount="indefinite"/>
+  </ellipse>
+
+  <!-- breathing body -->
+  <g>
+    <animateTransform attributeName="transform" type="translate"
+                      values="0 0; 0 -4; 0 0" dur="3.6s" repeatCount="indefinite"/>
+    <ellipse cx="120" cy="130" rx="62" ry="58" fill="url(#body)" stroke="#2c5fa8" stroke-width="2">
+      <animate attributeName="ry" values="58;62;58" dur="3.6s" repeatCount="indefinite"/>
+    </ellipse>
+
+    <!-- eyes -->
+    <ellipse cx="100" cy="120" rx="6" ry="9" fill="#1a2a48">
+      <animate attributeName="ry" values="9;9;0.6;9;9" keyTimes="0;0.6;0.65;0.7;1" dur="4.2s" repeatCount="indefinite"/>
+    </ellipse>
+    <ellipse cx="140" cy="120" rx="6" ry="9" fill="#1a2a48">
+      <animate attributeName="ry" values="9;9;0.6;9;9" keyTimes="0;0.6;0.65;0.7;1" dur="4.2s" repeatCount="indefinite"/>
+    </ellipse>
+    <!-- eye highlights -->
+    <circle cx="102" cy="117" r="1.6" fill="#fff"/>
+    <circle cx="142" cy="117" r="1.6" fill="#fff"/>
+
+    <!-- subtle smile -->
+    <path d="M108 142 Q120 152 132 142" stroke="#1a2a48" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

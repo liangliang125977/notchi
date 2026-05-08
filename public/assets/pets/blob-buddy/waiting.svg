@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Blob Buddy · waiting pose — eyes half-closed, slow bob.
+  CC0 — drawn by hand for the Notchi project.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <radialGradient id="body" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#dcd0ff"/>
+      <stop offset="100%" stop-color="#9c89e0"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.16)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="120" cy="202" rx="56" ry="8" fill="url(#shadow)"/>
+
+  <g>
+    <animateTransform attributeName="transform" type="translate"
+                      values="0 0; 0 -2; 0 0" dur="6s" repeatCount="indefinite"/>
+    <ellipse cx="120" cy="130" rx="62" ry="58" fill="url(#body)" stroke="#6b54b0" stroke-width="2"/>
+    <!-- sleepy half-open eyes -->
+    <path d="M94 122 Q100 124 106 122" stroke="#3a2a6a" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M134 122 Q140 124 146 122" stroke="#3a2a6a" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- soft mouth -->
+    <path d="M110 145 Q120 150 130 145" stroke="#3a2a6a" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- z's drifting up -->
+  <g fill="#9c89e0" font-family="system-ui" font-weight="600">
+    <text x="170" y="80" font-size="18">
+      z
+      <animate attributeName="opacity" values="0;1;0" dur="3s" begin="0s" repeatCount="indefinite"/>
+      <animate attributeName="y" values="80;50" dur="3s" begin="0s" repeatCount="indefinite"/>
+    </text>
+    <text x="180" y="100" font-size="14">
+      z
+      <animate attributeName="opacity" values="0;1;0" dur="3s" begin="1s" repeatCount="indefinite"/>
+      <animate attributeName="y" values="100;70" dur="3s" begin="1s" repeatCount="indefinite"/>
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,18 @@
+{
+  "id": "blob-buddy",
+  "name": "Blob Buddy",
+  "description": "Hand-drawn SVG · five distinct moods",
+  "engine": "sprite",
+  "actions": {
+    "idle":    { "src": "idle.svg",    "loop": true },
+    "coding":  { "src": "coding.svg",  "loop": true },
+    "waiting": { "src": "waiting.svg", "loop": true },
+    "done":    { "src": "done.svg",    "loop": false, "options": { "duration": 1500 } },
+    "sleep":   { "src": "sleep.svg",   "loop": true }
+  },
+  "credits": {
+    "author": "Notchi authors",
+    "license": "CC0",
+    "sourceUrl": "https://github.com/liangliang125977/notchi"
+  }
+}

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Blob Buddy · done pose — happy bounce + sparkles. One-shot.
+  CC0 — drawn by hand for the Notchi project.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <radialGradient id="body" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffe39a"/>
+      <stop offset="100%" stop-color="#ff9b40"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.18)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="120" cy="200" rx="58" ry="9" fill="url(#shadow)">
+    <animate attributeName="rx" values="58;46;58" dur="0.6s" repeatCount="indefinite"/>
+  </ellipse>
+
+  <g>
+    <animateTransform attributeName="transform" type="translate"
+                      values="0 0; 0 -18; 0 0" dur="0.6s" repeatCount="indefinite"/>
+    <ellipse cx="120" cy="130" rx="62" ry="58" fill="url(#body)" stroke="#cc6f1f" stroke-width="2"/>
+    <!-- happy curved eyes -->
+    <path d="M90 122 Q100 110 108 122" stroke="#3d1f08" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M132 122 Q140 110 150 122" stroke="#3d1f08" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- big smile -->
+    <path d="M100 142 Q120 162 140 142" stroke="#3d1f08" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#ffd84d">
+    <circle cx="60" cy="80" r="2.5">
+      <animate attributeName="r" values="2.5;5;2.5" dur="0.8s" begin="0s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="0.8s" begin="0s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="180" cy="70" r="2.5">
+      <animate attributeName="r" values="2.5;5;2.5" dur="0.8s" begin="0.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="0.8s" begin="0.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="40" cy="140" r="2.5">
+      <animate attributeName="r" values="2.5;5;2.5" dur="0.8s" begin="0.4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="0.8s" begin="0.4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="200" cy="130" r="2.5">
+      <animate attributeName="r" values="2.5;5;2.5" dur="0.8s" begin="0.6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="0.8s" begin="0.6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+</svg>

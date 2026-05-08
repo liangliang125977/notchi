@@ -88,6 +88,40 @@ pnpm tauri build    # release .app + .dmg under src-tauri/target/release/bundle/
 > If your `cc` is shadowed by a Homebrew shim (e.g. `claude-code-switcher`),
 > prefix every `cargo` / `pnpm tauri` invocation with `PATH=/usr/bin:$HOME/.cargo/bin:$PATH`.
 
+## Remotion animations
+
+Notchi also includes two Remotion compositions under `remotion-video/`:
+
+- `NotchiProductTeaser` — 16:9 product teaser, 42 seconds.
+- `NotchiSocialLoop` — 9:16 social loop, 14 seconds.
+
+Preview:
+
+```bash
+pnpm remotion:studio
+```
+
+Render:
+
+```bash
+pnpm remotion:render NotchiProductTeaser renders/notchi-product-teaser.mp4
+pnpm remotion:render NotchiSocialLoop renders/notchi-social-loop.mp4
+```
+
+Render a still frame:
+
+```bash
+pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-product-check.png --frame=360
+pnpm remotion:still NotchiSocialLoop /private/tmp/notchi-social-check.png --frame=120
+```
+
+When running inside Codex Desktop on macOS, Remotion's native bundler and
+Headless Chrome may need Homebrew Node instead of the app-bundled Node:
+
+```bash
+PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin /opt/homebrew/bin/pnpm remotion:studio
+```
+
 For setting up Notchi on a fresh Mac, or moving the project between
 machines, see [MIGRATION.md](./MIGRATION.md).
 

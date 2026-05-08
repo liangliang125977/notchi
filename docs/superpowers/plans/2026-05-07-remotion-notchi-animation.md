@@ -140,7 +140,7 @@ Run: `pnpm typecheck`
 
 Expected: TypeScript passes.
 
-Run: `pnpm remotion:still -- NotchiProductTeaser --frame=30 --output=/private/tmp/notchi-product-teaser.png`
+Run: `pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-product-teaser.png --frame=30`
 
 Expected: still image renders and contains the placeholder text.
 
@@ -308,9 +308,9 @@ Each beat should be readable for at least 2.5 seconds.
 Run:
 
 ```bash
-pnpm remotion:still -- NotchiProductTeaser --frame=120 --output=/private/tmp/notchi-teaser-120.png
-pnpm remotion:still -- NotchiProductTeaser --frame=420 --output=/private/tmp/notchi-teaser-420.png
-pnpm remotion:still -- NotchiProductTeaser --frame=720 --output=/private/tmp/notchi-teaser-720.png
+pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-teaser-120.png --frame=120
+pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-teaser-420.png --frame=420
+pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-teaser-720.png --frame=720
 ```
 
 Expected:
@@ -368,8 +368,8 @@ function loopTextProgress(frame: number) {
 Render:
 
 ```bash
-pnpm remotion:still -- NotchiSocialLoop --frame=0 --output=/private/tmp/notchi-loop-0.png
-pnpm remotion:still -- NotchiSocialLoop --frame=390 --output=/private/tmp/notchi-loop-390.png
+pnpm remotion:still NotchiSocialLoop /private/tmp/notchi-loop-0.png --frame=0
+pnpm remotion:still NotchiSocialLoop /private/tmp/notchi-loop-390.png --frame=390
 ```
 
 Expected: frame 390 visually approaches frame 0, with no dashboard left on screen.
@@ -414,8 +414,8 @@ Run:
 ```bash
 pnpm typecheck
 pnpm lint
-pnpm remotion:still -- NotchiProductTeaser --frame=360 --output=/private/tmp/notchi-product-check.png
-pnpm remotion:still -- NotchiSocialLoop --frame=120 --output=/private/tmp/notchi-social-check.png
+pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-product-check.png --frame=360
+pnpm remotion:still NotchiSocialLoop /private/tmp/notchi-social-check.png --frame=120
 ```
 
 Expected: commands pass and stills are nonblank.

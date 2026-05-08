@@ -99,8 +99,8 @@ Verification commands:
 
 - `pnpm typecheck`
 - `pnpm lint`
-- `pnpm remotion:still -- NotchiProductTeaser --frame=360`
-- `pnpm remotion:still -- NotchiSocialLoop --frame=120`
+- `pnpm remotion:still NotchiProductTeaser /private/tmp/notchi-product-check.png --frame=360`
+- `pnpm remotion:still NotchiSocialLoop /private/tmp/notchi-social-check.png --frame=120`
 
 Manual review:
 

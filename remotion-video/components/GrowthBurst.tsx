@@ -3,9 +3,11 @@ import { colors } from "../styles";
 
 interface GrowthBurstProps {
   progress: number;
+  x?: number;
+  y?: number;
 }
 
-export function GrowthBurst({ progress }: GrowthBurstProps) {
+export function GrowthBurst({ progress, x = 0, y = 0 }: GrowthBurstProps) {
   const frame = useCurrentFrame();
 
   return (
@@ -25,8 +27,8 @@ export function GrowthBurst({ progress }: GrowthBurstProps) {
             key={i}
             style={{
               position: "absolute",
-              left: "50%",
-              top: "50%",
+              left: `calc(50% + ${x}px)`,
+              top: `calc(50% + ${y}px)`,
               width: i % 3 === 0 ? 18 : 12,
               height: i % 3 === 0 ? 18 : 12,
               borderRadius: i % 2 === 0 ? 999 : 4,

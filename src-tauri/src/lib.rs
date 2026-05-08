@@ -270,6 +270,29 @@ pub fn run() {
                 });
             }
 
+            // v0.2 #3: hooks HTTP server — receives PreToolUse /
+            // PostToolUse / Stop callbacks from Claude Code and emits
+            // them as `pet:hook-event` for the frontend to drive
+            // transient pet expressions. Bind failures (port collision,
+            // sandbox restriction) are logged but do not fail app
+            // startup.
+            {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    match crate::hooks::start_server(app_handle).await {
+                        Ok(handle) => {
+                            println!(
+                                "[hooks-server] listening on 127.0.0.1:{}",
+                                handle.port
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("[hooks-server] failed to start: {e}");
+                        }
+                    }
+                });
+            }
+
             #[cfg(target_os = "macos")]
             {
                 // SPEC §6.7 D1: hide from Dock and Cmd-Tab. Mirrors the

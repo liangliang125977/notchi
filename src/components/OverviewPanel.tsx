@@ -222,6 +222,8 @@ export function OverviewPanel() {
             period={period}
             formatKey={(k) => formatSource(k)}
             emptyText={PERIOD_EMPTY[period]}
+            showCache
+            t={t}
           />
         </section>
         <section className="ov-section">
@@ -233,6 +235,8 @@ export function OverviewPanel() {
             period={period}
             formatKey={(k) => formatModel(k)}
             emptyText={PERIOD_EMPTY[period]}
+            showCache
+            t={t}
           />
         </section>
       </div>
@@ -445,11 +449,15 @@ function BarList({
   rows,
   formatKey,
   emptyText,
+  showCache = false,
+  t,
 }: {
   rows: GroupRow[];
   period: Period;
   formatKey: (k: string) => string;
   emptyText: string;
+  showCache?: boolean;
+  t?: ReturnType<typeof useT>;
 }) {
   if (rows.length === 0) {
     return <p className="ov-empty">{emptyText}</p>;
@@ -465,6 +473,11 @@ function BarList({
             aria-hidden="true"
           />
           <span className="ov-bar-pct">{r.percentage.toFixed(0)}%</span>
+          {showCache && t ? (
+            <span className="ov-bar-cache">
+              {t.overview.cacheLabel(`${r.cache_hit_pct.toFixed(1)}%`)}
+            </span>
+          ) : null}
         </li>
       ))}
     </ul>

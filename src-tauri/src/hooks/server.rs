@@ -17,7 +17,12 @@ pub struct ServerHandle {
 
 #[derive(Debug, Deserialize)]
 pub struct HookPayload {
+    // `session_id` / `timestamp` arrive on every payload but the
+    // current visualisation layer does not surface them. Declared so
+    // serde does not silently drop the fields and so v0.3 does not
+    // need to revisit this struct.
     #[serde(default)]
+    #[allow(dead_code)]
     pub session_id: Option<String>,
     #[serde(default)]
     pub tool_name: Option<String>,
@@ -26,6 +31,7 @@ pub struct HookPayload {
     #[serde(default)]
     pub duration_ms: Option<u64>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }
 

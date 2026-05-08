@@ -1,0 +1,18 @@
+{
+  "id": "nezha",
+  "name": "Nezha",
+  "description": "哪吒 之魔童降世 sticker",
+  "engine": "sprite",
+  "actions": {
+    "idle":    { "src": "idle.webp", "loop": true },
+    "coding":  { "src": "idle.webp", "loop": true },
+    "waiting": { "src": "idle.webp", "loop": true },
+    "done":    { "src": "idle.webp", "loop": false, "options": { "duration": 1500 } },
+    "sleep":   { "src": "idle.webp", "loop": true }
+  },
+  "credits": {
+    "author": "Tenor / GIPHY contributor",
+    "license": "Personal use sticker",
+    "sourceUrl": "https://tenor.com/zh-CN/search/nezha-stickers"
+  }
+}

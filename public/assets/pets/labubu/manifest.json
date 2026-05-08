@@ -1,0 +1,18 @@
+{
+  "id": "labubu",
+  "name": "Labubu",
+  "description": "Labubu Pop Mart sticker",
+  "engine": "sprite",
+  "actions": {
+    "idle":    { "src": "idle.gif", "loop": true },
+    "coding":  { "src": "idle.gif", "loop": true },
+    "waiting": { "src": "idle.gif", "loop": true },
+    "done":    { "src": "idle.gif", "loop": false, "options": { "duration": 1500 } },
+    "sleep":   { "src": "idle.gif", "loop": true }
+  },
+  "credits": {
+    "author": "Tenor / GIPHY contributor",
+    "license": "Personal use sticker",
+    "sourceUrl": "https://giphy.com/search/labubu-stickers"
+  }
+}

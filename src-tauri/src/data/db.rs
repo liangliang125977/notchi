@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS events (
     raw_event_type TEXT,
     message_id TEXT,
     request_id TEXT,
+    agent_id TEXT,                  -- NULL for main session events
+    parent_session_id TEXT,         -- NULL except for subagent events
     ingested_at TEXT NOT NULL
 );
 
@@ -109,5 +111,30 @@ pub async fn init_pool(db_file: &Path) -> Result<SqlitePool, sqlx::Error> {
         .await?;
 
     sqlx::query(SCHEMA_SQL).execute(&pool).await?;
+    add_column_if_missing(&pool, "events", "agent_id", "TEXT").await?;
+    add_column_if_missing(&pool, "events", "parent_session_id", "TEXT").await?;
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_events_agent
+         ON events(agent_id) WHERE agent_id IS NOT NULL",
+    ).execute(&pool).await?;
     Ok(pool)
+}
+
+async fn add_column_if_missing(
+    pool: &SqlitePool,
+    table: &str,
+    column: &str,
+    type_decl: &str,
+) -> Result<(), sqlx::Error> {
+    let rows: Vec<(String,)> =
+        sqlx::query_as(&format!("SELECT name FROM pragma_table_info('{table}')"))
+            .fetch_all(pool)
+            .await?;
+    if rows.iter().any(|(n,)| n == column) {
+        return Ok(());
+    }
+    sqlx::query(&format!("ALTER TABLE {table} ADD COLUMN {column} {type_decl}"))
+        .execute(pool)
+        .await?;
+    Ok(())
 }

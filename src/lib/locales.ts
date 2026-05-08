@@ -46,6 +46,11 @@ export interface Strings {
     colProject: string;
     colTokens: string;
     colModel: string;
+    cacheEfficiency: string;
+    cacheSaved: string;
+    cacheReads: string;
+    cacheVsYesterday: (delta: number) => string;
+    cacheLabel: (pct: string) => string;
   };
   // Sessions panel
   sessions: {
@@ -174,6 +179,12 @@ export const en: Strings = {
     colProject: "Project",
     colTokens: "Tokens",
     colModel: "Model",
+    cacheEfficiency: "Cache Efficiency",
+    cacheSaved: "Saved",
+    cacheReads: "Cache reads",
+    cacheVsYesterday: (d) =>
+      `${d > 0 ? "↑" : d < 0 ? "↓" : ""} ${Math.abs(d).toFixed(1)}% vs yesterday`,
+    cacheLabel: (pct) => `cache ${pct}`,
   },
   sessions: {
     filterPlaceholder: "Filter project path…",
@@ -308,6 +319,12 @@ export const zh: Strings = {
     colProject: "项目",
     colTokens: "Token",
     colModel: "模型",
+    cacheEfficiency: "缓存效率",
+    cacheSaved: "节省",
+    cacheReads: "缓存读取量",
+    cacheVsYesterday: (d) =>
+      `${d > 0 ? "↑" : d < 0 ? "↓" : ""} ${Math.abs(d).toFixed(1)}% vs 昨天`,
+    cacheLabel: (pct) => `缓存 ${pct}`,
   },
   sessions: {
     filterPlaceholder: "筛选项目路径…",

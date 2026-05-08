@@ -215,6 +215,31 @@ pub fn run() {
             })
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             app.manage(state);
+
+            // v0.2 #1: subagent radar — poll every 5s and emit diff
+            {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use std::time::Duration;
+                    let mut prev_state: Vec<crate::data::subagents::ActiveSubagent> = Vec::new();
+                    loop {
+                        let state = app_handle.state::<crate::data::DataState>();
+                        let pool = &state.pool;
+                        match crate::data::subagents::active_subagents(pool).await {
+                            Ok(curr) => {
+                                if serde_json::to_string(&curr).ok()
+                                    != serde_json::to_string(&prev_state).ok() {
+                                    let _ = app_handle.emit("pet:subagents-changed", &curr);
+                                    prev_state = curr;
+                                }
+                            }
+                            Err(e) => eprintln!("[subagents] {e}"),
+                        }
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
+                });
+            }
+
             #[cfg(target_os = "macos")]
             {
                 // SPEC §6.7 D1: hide from Dock and Cmd-Tab. Mirrors the

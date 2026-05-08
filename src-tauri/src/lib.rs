@@ -7,7 +7,6 @@ mod tray;
 
 use serde::Serialize;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager};
-#[cfg(target_os = "macos")]
 use tauri_plugin_store::StoreExt;
 
 /// Filename of the JSON-backed settings store managed by
@@ -240,6 +239,32 @@ pub fn run() {
                             Err(e) => eprintln!("[subagents] {e}"),
                         }
                         tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
+                });
+            }
+
+            // v0.2 #2: burn-rate predictor
+            {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use std::time::Duration;
+                    let mut prev_status: Option<String> = None;
+                    loop {
+                        let state = app_handle.state::<crate::data::DataState>();
+                        let budget = app_handle.store(SETTINGS_STORE_PATH).ok()
+                            .and_then(|s| s.get(MONTHLY_BUDGET_KEY))
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(50.0);
+                        match crate::data::burn_rate::burn_rate_now(&state.pool, budget).await {
+                            Ok(br) => {
+                                let _ = app_handle.emit("pet:burn-rate-changed", &br);
+                                if prev_status.as_deref() != Some(&br.status) {
+                                    prev_status = Some(br.status.clone());
+                                }
+                            }
+                            Err(e) => eprintln!("[burn_rate] {e}"),
+                        }
+                        tokio::time::sleep(Duration::from_secs(30)).await;
                     }
                 });
             }

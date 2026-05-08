@@ -12,6 +12,7 @@
 //! with hashed/short identifiers; per-line jsonl parse errors land in
 //! `~/Library/Logs/Notchi/parse-errors.log` (S14).
 
+pub mod burn_rate;
 pub mod commands;
 pub mod db;
 pub mod evolution;

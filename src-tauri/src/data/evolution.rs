@@ -190,7 +190,10 @@ pub(crate) fn fuse_mood(
         "hot" => "content",
         _ => fm, // calm/warm — don't lower
     };
-    *[fm, cm, bm].iter().min_by_key(|m| mood_rank(m)).unwrap()
+    [fm, cm, bm]
+        .into_iter()
+        .min_by_key(|m| mood_rank(m))
+        .unwrap()
 }
 
 fn read_feed(app: &AppHandle) -> (i32, Option<String>, Vec<FeedLogEntry>) {

@@ -5,6 +5,7 @@ import type { SettingsBundle, SourceStatus } from "../lib/dataTypes";
 import { useT } from "../hooks/useT";
 import { useLangStore } from "../stores/langStore";
 import type { Locale } from "../lib/locales";
+import { HooksToggle } from "./HooksToggle";
 
 const DEFAULT_MUTE_FROM = "22:00";
 const DEFAULT_MUTE_TO = "09:00";
@@ -234,6 +235,13 @@ export function SettingsPanel() {
             {t.settings.save}
           </button>
         </div>
+      </Section>
+
+      <Section
+        title={t.settings.hooksIntegration}
+        hint={t.settings.hooksIntegrationHint}
+      >
+        <HooksToggle />
       </Section>
 
       <Section title={t.settings.language} hint={t.settings.languageHint}>

@@ -92,6 +92,11 @@ export interface Strings {
     monthlyBudget: string;
     monthlyBudgetHint: string;
     monthlyBudgetSaved: string;
+    hooksIntegration: string;
+    hooksIntegrationHint: string;
+    hooksHint: string;
+    enable: string;
+    disable: string;
     dangerZone: string;
     dangerZoneHint: string;
     clearAll: string;
@@ -234,6 +239,13 @@ export const en: Strings = {
     monthlyBudgetHint:
       "The pet gets agitated when projected month-end spend approaches this amount.",
     monthlyBudgetSaved: "Monthly budget saved.",
+    hooksIntegration: "Claude Code hooks",
+    hooksIntegrationHint:
+      "Drive the pet's expression from your Claude Code tool calls (Bash → flexes, Edit → glasses on, Stop → done dance).",
+    hooksHint:
+      "Notchi reads / writes ~/.claude/settings.json. The original is backed up to settings.json.notchi-backup.",
+    enable: "Enable",
+    disable: "Disable",
     dangerZone: "Danger zone",
     dangerZoneHint:
       "Wipes the local events table. Notchi will rebuild from existing jsonl files automatically.",
@@ -377,6 +389,13 @@ export const zh: Strings = {
     monthlyBudgetHint:
       "当月底预测花费接近此数字时，宠物会进入警觉状态。",
     monthlyBudgetSaved: "月度预算已保存。",
+    hooksIntegration: "Claude Code Hooks 集成",
+    hooksIntegrationHint:
+      "让宠物表情随 Claude Code 工具调用切换（Bash → 撸袖子，Edit → 戴眼镜，Stop → 完成动画）。",
+    hooksHint:
+      "Notchi 会读写 ~/.claude/settings.json，安装前自动备份到 settings.json.notchi-backup。",
+    enable: "启用",
+    disable: "禁用",
     dangerZone: "危险操作",
     dangerZoneHint: "清空本地事件表。Notchi 会自动从现有 jsonl 文件重建。",
     clearAll: "清除所有数据…",

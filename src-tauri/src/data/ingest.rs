@@ -270,8 +270,9 @@ async fn persist_event(
             timestamp, source, model, input_tokens, output_tokens,
             cache_read_input_tokens, cache_creation_input_tokens,
             cost_usd, project_path, session_id, is_third_party,
-            endpoint_id, raw_event_type, message_id, request_id, ingested_at
-         ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,NULL,?12,?13,?14,?15)",
+            endpoint_id, raw_event_type, message_id, request_id, ingested_at,
+            agent_id, parent_session_id
+         ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,NULL,?12,?13,?14,?15,?16,?17)",
     )
     .bind(&parsed.timestamp)
     .bind(parsed.source)
@@ -288,6 +289,8 @@ async fn persist_event(
     .bind(parsed.message_id.as_deref())
     .bind(parsed.request_id.as_deref())
     .bind(now_iso)
+    .bind(parsed.agent_id.as_deref())
+    .bind(parsed.parent_session_id.as_deref())
     .execute(&mut **tx)
     .await
     .map_err(io_other)?;

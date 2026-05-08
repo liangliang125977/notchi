@@ -137,6 +137,8 @@ impl DataSourceAdapter for CodexAdapter {
                     kind: EventKind::Other,
                     usage: None,
                     is_third_party: false,
+                    agent_id: None,
+                    parent_session_id: None,
                 })
             }
             "turn_context" => {
@@ -168,6 +170,8 @@ impl DataSourceAdapter for CodexAdapter {
                     kind: EventKind::Other,
                     usage: None,
                     is_third_party: false,
+                    agent_id: None,
+                    parent_session_id: None,
                 })
             }
             "event_msg" => {
@@ -189,6 +193,8 @@ impl DataSourceAdapter for CodexAdapter {
                         kind: EventKind::UserTurn,
                         usage: None,
                         is_third_party: false,
+                        agent_id: None,
+                        parent_session_id: None,
                     }),
                     "task_complete" => {
                         let turn_id = payload
@@ -207,6 +213,8 @@ impl DataSourceAdapter for CodexAdapter {
                             kind: EventKind::Completion,
                             usage: None,
                             is_third_party: false,
+                            agent_id: None,
+                            parent_session_id: None,
                         })
                     }
                     "token_count" => {
@@ -257,6 +265,8 @@ impl DataSourceAdapter for CodexAdapter {
                                 cache_create: 0,
                             }),
                             is_third_party: false,
+                            agent_id: None,
+                            parent_session_id: None,
                         })
                     }
                     _ => None,

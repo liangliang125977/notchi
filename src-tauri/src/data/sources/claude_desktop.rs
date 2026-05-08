@@ -149,6 +149,8 @@ impl DataSourceAdapter for ClaudeDesktopAdapter {
                     kind,
                     usage: None,
                     is_third_party: false,
+                    agent_id: None,
+                    parent_session_id: None,
                 })
             }
             "assistant" => {
@@ -174,6 +176,8 @@ impl DataSourceAdapter for ClaudeDesktopAdapter {
                     kind: EventKind::Assistant,
                     usage,
                     is_third_party: false,
+                    agent_id: None,
+                    parent_session_id: None,
                 })
             }
             _ => None,

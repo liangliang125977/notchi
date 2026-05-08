@@ -47,6 +47,11 @@ pub struct ParsedEvent {
     pub kind: EventKind,
     pub usage: Option<ParsedUsage>,
     pub is_third_party: bool,
+    /// Subagent-mode only: the agent UUID from the jsonl filename or
+    /// inline field. NULL for main-session rows.
+    pub agent_id: Option<String>,
+    /// Subagent-mode only: the parent session UUID. NULL for main rows.
+    pub parent_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

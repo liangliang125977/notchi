@@ -148,6 +148,8 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
                     kind,
                     usage: None,
                     is_third_party: false,
+                    agent_id: None,
+                    parent_session_id: None,
                 });
             }
         }
@@ -179,6 +181,8 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
             kind: EventKind::Assistant,
             usage,
             is_third_party: false,
+            agent_id: None,
+            parent_session_id: None,
         })
     }
 }

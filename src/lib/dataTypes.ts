@@ -66,6 +66,17 @@ export type ActiveSubagent = {
   is_alive: boolean;
 };
 
+/** v0.2 #2 — 30-minute rolling burn rate + month projection. */
+export type BurnRate = {
+  tokens_per_min: number;
+  usd_per_min: number;
+  usd_today: number;
+  usd_budget_month: number;
+  usd_projected_month: number;
+  /** "calm" | "warm" | "hot" | "scorching" */
+  status: string;
+};
+
 export type SettingsBundle = {
   claude_code_data_dir: string | null;
   claude_code_found: boolean;

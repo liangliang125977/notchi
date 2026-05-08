@@ -71,6 +71,10 @@ tmp/
 # Claude Code worktrees (sub-agent isolated workspaces)
 .claude/worktrees/
 
+# Skill / agent local session artefacts
+.superpowers/
+generated/
+
 # Coverage / Test artifacts
 coverage/
 *.lcov

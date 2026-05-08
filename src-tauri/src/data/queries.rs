@@ -156,6 +156,10 @@ pub struct GroupRow {
     pub key: String,
     pub tokens: i64,
     pub percentage: f64,
+    /// Cache hit rate over `input + cache_read + cache_creation`
+    /// across this group's events. 0.0 when the group has no
+    /// cache-relevant events.
+    pub cache_hit_pct: f64,
 }
 
 pub async fn token_by_source(pool: &SqlitePool, period: Period) -> Result<Vec<GroupRow>, sqlx::Error> {
@@ -172,18 +176,26 @@ pub async fn token_by_project(pool: &SqlitePool, period: Period) -> Result<Vec<G
     let sql = format!(
         "SELECT COALESCE(project_path, '(unknown)') AS key,
                 COALESCE(SUM(input_tokens + output_tokens
-                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens,
+                COALESCE(SUM(cache_read_input_tokens),0) AS cache_read,
+                COALESCE(SUM(input_tokens + cache_read_input_tokens
+                             + cache_creation_input_tokens),0) AS total_for_hit
          FROM events WHERE timestamp >= {lb}
          GROUP BY project_path ORDER BY tokens DESC"
     );
-    let rows: Vec<(String, i64)> = sqlx::query_as(&sql).fetch_all(pool).await?;
-    let total: i64 = rows.iter().map(|(_, t)| *t).sum();
+    let rows: Vec<(String, i64, i64, i64)> = sqlx::query_as(&sql).fetch_all(pool).await?;
+    let total: i64 = rows.iter().map(|(_, t, _, _)| *t).sum();
     Ok(rows
         .into_iter()
-        .map(|(k, t)| GroupRow {
+        .map(|(k, t, cache_read, total_for_hit)| GroupRow {
             key: k,
             tokens: t,
             percentage: if total > 0 { (t as f64) * 100.0 / (total as f64) } else { 0.0 },
+            cache_hit_pct: if total_for_hit > 0 {
+                (cache_read as f64) * 100.0 / (total_for_hit as f64)
+            } else {
+                0.0
+            },
         })
         .collect())
 }
@@ -198,18 +210,26 @@ async fn group_by(
     let sql = format!(
         "SELECT {col} AS key,
                 COALESCE(SUM(input_tokens + output_tokens
-                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens
+                             + cache_read_input_tokens + cache_creation_input_tokens),0) AS tokens,
+                COALESCE(SUM(cache_read_input_tokens),0) AS cache_read,
+                COALESCE(SUM(input_tokens + cache_read_input_tokens
+                             + cache_creation_input_tokens),0) AS total_for_hit
          FROM events WHERE timestamp >= {lb}
          GROUP BY {col} ORDER BY tokens DESC"
     );
-    let rows: Vec<(String, i64)> = sqlx::query_as(&sql).fetch_all(pool).await?;
-    let total: i64 = rows.iter().map(|(_, t)| *t).sum();
+    let rows: Vec<(String, i64, i64, i64)> = sqlx::query_as(&sql).fetch_all(pool).await?;
+    let total: i64 = rows.iter().map(|(_, t, _, _)| *t).sum();
     Ok(rows
         .into_iter()
-        .map(|(k, t)| GroupRow {
+        .map(|(k, t, cache_read, total_for_hit)| GroupRow {
             key: k,
             tokens: t,
             percentage: if total > 0 { (t as f64) * 100.0 / (total as f64) } else { 0.0 },
+            cache_hit_pct: if total_for_hit > 0 {
+                (cache_read as f64) * 100.0 / (total_for_hit as f64)
+            } else {
+                0.0
+            },
         })
         .collect())
 }

@@ -46,6 +46,11 @@ pub struct TokenSummary {
     pub total_cost_usd: String,
     pub session_count: i64,
     pub dominant_model: Option<String>,
+    /// Estimated USD saved by Anthropic-style prompt caching during
+    /// the period: SUM(cache_read × (input_price - cache_read_price))
+    /// across events whose model has a row in `pricing`. Models
+    /// without pricing are silently skipped.
+    pub cache_savings_usd: String,
 }
 
 pub async fn token_summary(pool: &SqlitePool, period: Period) -> Result<TokenSummary, sqlx::Error> {
@@ -79,6 +84,24 @@ pub async fn token_summary(pool: &SqlitePool, period: Period) -> Result<TokenSum
     );
     let dominant: Option<(String,)> = sqlx::query_as(&dom_sql).fetch_optional(pool).await?;
 
+    // Cache savings: cache_read × (input_price - cache_read_price) per
+    // event row, joined to pricing on (model, endpoint_id='default').
+    // LEFT JOIN + IS NOT NULL guard ensures rows for models without
+    // pricing contribute 0 instead of failing.
+    let savings_sql = format!(
+        "SELECT COALESCE(SUM(
+            e.cache_read_input_tokens / 1000000.0
+            * (CAST(p.input_per_mtok AS REAL) - CAST(p.cache_read_per_mtok AS REAL))
+         ), 0.0)
+         FROM events e
+         LEFT JOIN pricing p
+           ON p.model = e.model AND p.endpoint_id = 'default'
+         WHERE e.timestamp >= {lb}
+           AND e.cache_read_input_tokens > 0
+           AND p.model IS NOT NULL"
+    );
+    let (savings,): (f64,) = sqlx::query_as(&savings_sql).fetch_one(pool).await?;
+
     Ok(TokenSummary {
         total_input: i,
         total_output: o,
@@ -87,6 +110,7 @@ pub async fn token_summary(pool: &SqlitePool, period: Period) -> Result<TokenSum
         total_cost_usd: format!("{cost:.4}"),
         session_count: sessions,
         dominant_model: dominant.map(|(m,)| m),
+        cache_savings_usd: format!("{savings:.2}"),
     })
 }
 

@@ -28,6 +28,8 @@ export type TokenSummary = {
   total_cost_usd: string;
   session_count: number;
   dominant_model: string | null;
+  /** Estimated USD saved by prompt caching for this period. */
+  cache_savings_usd: string;
 };
 
 export type TimeseriesPoint = {
@@ -40,6 +42,7 @@ export type GroupRow = {
   key: string;
   tokens: number;
   percentage: number;
+  cache_hit_pct: number;
 };
 
 export type SessionRow = {

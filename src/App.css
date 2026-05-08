@@ -18,7 +18,7 @@ body,
   width: 100vw;
   height: 100vh;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   background: transparent;
@@ -68,13 +68,13 @@ body,
   image-rendering: -webkit-optimize-contrast;
 }
 
-/* ─── L2 capsule — info card below the pet ─────────────────────── */
+/* ─── L2 capsule — info card to the right of the pet ───────────── */
 
 .l2-capsule {
   flex: 0 0 auto;
-  align-self: stretch;
-  margin: 0 6px 6px 6px;
-  padding: 10px 16px;
+  width: 222px;          /* 240px window slot − 18px breathing room */
+  margin: auto 8px auto 4px;
+  padding: 10px 14px;
   border-radius: 16px;
   background: rgba(28, 28, 30, 0.82);
   backdrop-filter: blur(24px) saturate(180%);

@@ -6,18 +6,19 @@ import {
 } from "@tauri-apps/api/window";
 import { PET_SIZE_LARGE, PET_SIZE_SMALL, type PetSize } from "../stores/petStore";
 
-// hover the pet 300ms → window grows downward, info card appears below.
-// Leave → 1s linger → shrink back. Width stays constant.
+// hover the pet 300ms → window grows rightward, info card appears
+// beside the pet (right side). Leave → 1s linger → shrink back.
+// Height stays constant so the capsule never clips text vertically.
 
-const CARD_H = 96;
+const CARD_W = 240;
 
 function getSizes(petSize: PetSize) {
   const pet = petSize === "small" ? PET_SIZE_SMALL : PET_SIZE_LARGE;
   return {
     COLLAPSED_W: pet,
     COLLAPSED_H: pet,
-    EXPANDED_W: pet,
-    EXPANDED_H: pet + CARD_H,
+    EXPANDED_W: pet + CARD_W,
+    EXPANDED_H: pet,
   };
 }
 

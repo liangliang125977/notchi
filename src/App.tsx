@@ -9,7 +9,6 @@ import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
 import { EvolutionBurst } from "./components/EvolutionBurst";
 import { SubagentDots } from "./components/SubagentDots";
-import { BurnRateOverlay } from "./components/BurnRateOverlay";
 import { PetExpressionLayer } from "./components/PetExpressionLayer";
 import { usePetWindowDrag } from "./hooks/usePetWindowDrag";
 import { useFallbackEvents } from "./hooks/useFallbackEvents";
@@ -138,7 +137,6 @@ function App() {
           ? <PetCanvas key={`${petSize}-${selectedModelId}`} size={petDim} modelUrl={currentModel.modelPath} actionMotions={currentModel.actionMotions} />
           : <PetFallbackImage size={petDim} />}
         <SubagentDots subagents={subagents} />
-        <BurnRateOverlay />
         <PetExpressionLayer />
       </div>
       <L2Capsule visible={expanded} />

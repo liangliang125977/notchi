@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use sqlx::SqlitePool;
-use tauri::State;
+use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
 use super::queries::{self, GroupRow, Period, PricingEntry, SessionRow, TimeseriesPoint, TokenSummary};
@@ -387,4 +387,39 @@ pub async fn set_monthly_budget(app: tauri::AppHandle, usd: f64) -> Result<(), S
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     store.set("monthlyBudgetUsd", serde_json::Value::from(usd));
     Ok(())
+}
+
+// v0.2 #3 — hook installer commands. The hooks HTTP server is started
+// at app launch by lib.rs::setup; install/uninstall is gated by the
+// Settings UI. The port is read from ~/.notchi/port.txt which the
+// server writes on bind.
+
+#[tauri::command]
+pub async fn install_hooks_cmd(app: tauri::AppHandle) -> Result<u16, String> {
+    let port = read_hooks_port()?;
+    crate::hooks::install_hooks(port)?;
+    let _ = app.emit("pet:hooks-installed", port);
+    Ok(port)
+}
+
+#[tauri::command]
+pub fn uninstall_hooks_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    crate::hooks::uninstall_hooks()?;
+    let _ = app.emit("pet:hooks-uninstalled", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn hooks_status_cmd() -> bool {
+    crate::hooks::is_installed()
+}
+
+fn read_hooks_port() -> Result<u16, String> {
+    let home = std::env::var_os("HOME").ok_or("HOME unset")?;
+    let path = std::path::PathBuf::from(home).join(".notchi/port.txt");
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| format!("read {}: {e}", path.display()))?;
+    raw.trim()
+        .parse::<u16>()
+        .map_err(|e| format!("parse port: {e}"))
 }

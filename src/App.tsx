@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import "./App.css";
 import { listen } from "@tauri-apps/api/event";
 import { load } from "@tauri-apps/plugin-store";
-import { PetCanvas } from "./components/PetCanvas";
+import { PetRenderer } from "./components/pets/PetRenderer";
 import { PetFallbackImage } from "./components/PetFallbackImage";
+import { getPet, defaultPet } from "./lib/petRegistry";
 import { L2Capsule } from "./components/L2Capsule";
 import { WelcomeCard } from "./components/WelcomeCard";
 import { PetBubble } from "./components/PetBubble";
@@ -18,7 +19,6 @@ import { useEmotionEngine } from "./hooks/useEmotionEngine";
 import { usePetStatus, type EvolutionStage } from "./hooks/usePetStatus";
 import { useSubagents } from "./hooks/useSubagents";
 import { usePetStore, PET_SIZE_SMALL, PET_MODEL_CHANGED_EVENT, SELECTED_MODEL_KEY, type PetSize } from "./stores/petStore";
-import { getModelById } from "./lib/petModels";
 
 const STAGE_BUBBLE: Record<EvolutionStage, string> = {
   0: "孵化中…🥚",
@@ -51,7 +51,8 @@ function App() {
   const selectedModelId = usePetStore((s) => s.selectedModelId);
   const setSelectedModel = usePetStore((s) => s.setSelectedModel);
   const petDim = petSize === "small" ? PET_SIZE_SMALL : 240;
-  const currentModel = getModelById(selectedModelId);
+  const manifest = getPet(selectedModelId) ?? defaultPet();
+  const action = usePetStore((s) => s.currentAction);
 
   // Read initial settings from settings.json on mount.
   // The two webviews have isolated JS contexts, so we read from the store file directly.
@@ -133,8 +134,8 @@ function App() {
           transition: "filter 1.5s ease",
         }}
       >
-        {renderMode === "live2d"
-          ? <PetCanvas key={`${petSize}-${selectedModelId}`} size={petDim} modelUrl={currentModel.modelPath} actionMotions={currentModel.actionMotions} />
+        {manifest && renderMode === "live2d"
+          ? <PetRenderer key={`${petSize}-${manifest.id}`} size={petDim} action={action} manifest={manifest} />
           : <PetFallbackImage size={petDim} />}
         <SubagentDots subagents={subagents} />
         <PetExpressionLayer />

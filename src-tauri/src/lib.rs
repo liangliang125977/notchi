@@ -11,7 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 /// Filename of the JSON-backed settings store managed by
 /// `tauri-plugin-store`. Lives under the OS app-data dir.
-const SETTINGS_STORE_PATH: &str = "settings.json";
+pub(crate) const SETTINGS_STORE_PATH: &str = "settings.json";
 /// Settings key for the SPEC §4 S16 manual notch override.
 const NOTCH_MODE_KEY: &str = "notchMode";
 /// Settings key for SPEC §4 S8/S19 — last user-chosen pet window
@@ -23,7 +23,7 @@ const TARGET_SCREEN_ID_KEY: &str = "targetScreenId";
 /// User-selected pet size: "large" (240) or "small" (120). Default "large".
 const PET_SIZE_KEY: &str = "petSize";
 /// Plan #2 — monthly USD budget used to derive burn-rate runway.
-const MONTHLY_BUDGET_KEY: &str = "monthlyBudgetUsd";
+pub(crate) const MONTHLY_BUDGET_KEY: &str = "monthlyBudgetUsd";
 
 /// SPEC §6.7 D4 — frontend asks Rust for the current default pet
 /// position so it can compute the snap distance with the same numbers

@@ -172,6 +172,7 @@ fn cache_mood_for(hit_pct: f64) -> &'static str {
 pub(crate) fn fuse_mood(
     feed_mood: &str,
     cache: &crate::data::queries::CachePulse,
+    burn: &crate::data::burn_rate::BurnRate,
 ) -> &'static str {
     // Canonicalise feed_mood to one of the three known strings.
     let fm: &'static str = match feed_mood {
@@ -179,15 +180,17 @@ pub(crate) fn fuse_mood(
         "happy" => "happy",
         _ => "content",
     };
-    if cache.samples < 5 {
-        return fm;
-    }
-    let cm = cache_mood_for(cache.hit_pct);
-    if mood_rank(cm) < mood_rank(fm) {
-        cm
-    } else {
+    let cm = if cache.samples < 5 {
         fm
-    }
+    } else {
+        cache_mood_for(cache.hit_pct)
+    };
+    let bm: &'static str = match burn.status.as_str() {
+        "scorching" => "hungry",
+        "hot" => "content",
+        _ => fm, // calm/warm — don't lower
+    };
+    *[fm, cm, bm].iter().min_by_key(|m| mood_rank(m)).unwrap()
 }
 
 fn read_feed(app: &AppHandle) -> (i32, Option<String>, Vec<FeedLogEntry>) {
@@ -271,14 +274,34 @@ pub async fn pet_status(
             hit_pct: 100.0,
             samples: 0,
         });
+    let burn = current_burn(&app, &state.pool).await;
 
     Ok(PetStatus {
         feed_level: level.clamp(0, FEED_MAX) as u8,
-        mood: fuse_mood(mood_for(level), &pulse).to_string(),
+        mood: fuse_mood(mood_for(level), &pulse, &burn).to_string(),
         fed_at,
         evolution,
         recent_feeds,
     })
+}
+
+async fn current_burn(app: &AppHandle, pool: &SqlitePool) -> crate::data::burn_rate::BurnRate {
+    let budget = app
+        .store(crate::SETTINGS_STORE_PATH)
+        .ok()
+        .and_then(|s| s.get(crate::MONTHLY_BUDGET_KEY))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(50.0);
+    crate::data::burn_rate::burn_rate_now(pool, budget).await.unwrap_or(
+        crate::data::burn_rate::BurnRate {
+            tokens_per_min: 0.0,
+            usd_per_min: 0.0,
+            usd_today: 0.0,
+            usd_budget_month: budget,
+            usd_projected_month: 0.0,
+            status: "calm".to_string(),
+        },
+    )
 }
 
 #[tauri::command]
@@ -321,9 +344,10 @@ pub async fn record_feed(
             hit_pct: 100.0,
             samples: 0,
         });
+    let burn = current_burn(&app, &state.pool).await;
     Ok(PetStatus {
         feed_level: next as u8,
-        mood: fuse_mood(mood_for(next), &pulse).to_string(),
+        mood: fuse_mood(mood_for(next), &pulse, &burn).to_string(),
         fed_at: Some(now_iso),
         evolution: evolution_for_tokens(total),
         recent_feeds: log,
@@ -403,24 +427,60 @@ mod tests {
     fn fuse_mood_truth_table() {
         use crate::data::queries::CachePulse;
         let p = |pct: f64, samples: i64| CachePulse { hit_pct: pct, samples };
+        let calm = crate::data::burn_rate::BurnRate {
+            tokens_per_min: 0.0,
+            usd_per_min: 0.0,
+            usd_today: 0.0,
+            usd_budget_month: 50.0,
+            usd_projected_month: 0.0,
+            status: "calm".to_string(),
+        };
 
         // Below sample threshold → cache ignored, feed_mood passes through
-        assert_eq!(fuse_mood("happy", &p(10.0, 4)), "happy");
-        assert_eq!(fuse_mood("hungry", &p(99.0, 4)), "hungry");
+        assert_eq!(fuse_mood("happy", &p(10.0, 4), &calm), "happy");
+        assert_eq!(fuse_mood("hungry", &p(99.0, 4), &calm), "hungry");
 
         // Cache happy + feed happy → happy
-        assert_eq!(fuse_mood("happy", &p(95.0, 50)), "happy");
+        assert_eq!(fuse_mood("happy", &p(95.0, 50), &calm), "happy");
 
         // Cache hungry overrides feed happy → hungry
-        assert_eq!(fuse_mood("happy", &p(40.0, 50)), "hungry");
+        assert_eq!(fuse_mood("happy", &p(40.0, 50), &calm), "hungry");
 
         // Feed hungry overrides cache happy → hungry
-        assert_eq!(fuse_mood("hungry", &p(95.0, 50)), "hungry");
+        assert_eq!(fuse_mood("hungry", &p(95.0, 50), &calm), "hungry");
 
         // Both content → content
-        assert_eq!(fuse_mood("content", &p(80.0, 50)), "content");
+        assert_eq!(fuse_mood("content", &p(80.0, 50), &calm), "content");
 
         // Cache content + feed happy → content (take the worse of the two)
-        assert_eq!(fuse_mood("happy", &p(80.0, 50)), "content");
+        assert_eq!(fuse_mood("happy", &p(80.0, 50), &calm), "content");
+    }
+
+    #[test]
+    fn fuse_mood_with_burn() {
+        use crate::data::burn_rate::BurnRate;
+        use crate::data::queries::CachePulse;
+
+        let pulse = CachePulse { hit_pct: 95.0, samples: 50 }; // happy cache
+        let burn = |s: &str| BurnRate {
+            tokens_per_min: 0.0,
+            usd_per_min: 0.0,
+            usd_today: 0.0,
+            usd_budget_month: 50.0,
+            usd_projected_month: 0.0,
+            status: s.to_string(),
+        };
+
+        // calm burn + happy cache + happy feed → happy
+        assert_eq!(fuse_mood("happy", &pulse, &burn("calm")), "happy");
+
+        // scorching burn forces hungry regardless
+        assert_eq!(fuse_mood("happy", &pulse, &burn("scorching")), "hungry");
+
+        // hot burn → content
+        assert_eq!(fuse_mood("happy", &pulse, &burn("hot")), "content");
+
+        // warm + happy mood + happy cache → happy unchanged
+        assert_eq!(fuse_mood("happy", &pulse, &burn("warm")), "happy");
     }
 }

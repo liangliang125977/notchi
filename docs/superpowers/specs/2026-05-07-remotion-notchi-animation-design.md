@@ -69,14 +69,14 @@ Storyboard:
 
 ## Architecture
 
-Create a dedicated `remotion/` source tree so the video code stays separate from the desktop app.
+Create a dedicated `remotion-video/` source tree so the video code stays separate from the desktop app. The directory is intentionally not named `remotion/` because this repo uses TypeScript `baseUrl`, and a root folder named `remotion` shadows the npm package import.
 
-- `remotion/Root.tsx`: registers both compositions.
-- `remotion/ProductTeaser.tsx`: product teaser timeline.
-- `remotion/SocialLoop.tsx`: vertical loop timeline.
-- `remotion/components/*`: reusable visual pieces such as the Mac frame, pet sprite, L2 capsule, dashboard panel, signal lines, and typography.
-- `remotion/styles.ts`: shared tokens and helpers.
-- `remotion/index.ts`: Remotion entry point.
+- `remotion-video/Root.tsx`: registers both compositions.
+- `remotion-video/ProductTeaser.tsx`: product teaser timeline.
+- `remotion-video/SocialLoop.tsx`: vertical loop timeline.
+- `remotion-video/components/*`: reusable visual pieces such as the Mac frame, pet sprite, L2 capsule, dashboard panel, signal lines, and typography.
+- `remotion-video/styles.ts`: shared tokens and helpers.
+- `remotion-video/index.ts`: Remotion entry point.
 
 Use frame-driven animation only. CSS transitions, CSS animations, and Tailwind animation utilities are not used because they do not render reliably in Remotion.
 

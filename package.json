@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "remotion:studio": "remotion studio remotion-video/index.ts",
+    "remotion:still": "remotion still remotion-video/index.ts",
+    "remotion:render": "remotion render remotion-video/index.ts"
   },
   "dependencies": {
     "@pixi/core": "7.4.3",
@@ -34,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@remotion/cli": "4.0.457",
     "@tailwindcss/vite": "^4.2.4",
     "@tauri-apps/cli": "^2",
     "@tauri-apps/cli-darwin-arm64": "2.11.0",
@@ -48,9 +52,11 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "prettier": "^3.8.3",
+    "remotion": "4.0.457",
     "tailwindcss": "^4.2.4",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.59.2",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "zod": "4.3.6"
   }
 }

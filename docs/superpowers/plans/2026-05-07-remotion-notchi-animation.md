@@ -4,7 +4,7 @@
 
 **Goal:** Build two Remotion compositions for Notchi: a 16:9 product teaser and a 9:16 social loop.
 
-**Architecture:** Keep video code isolated under `remotion/` so the desktop app remains unchanged. Register two compositions in `remotion/Root.tsx`, share visual primitives from `remotion/components/`, and drive all movement with Remotion frame interpolation.
+**Architecture:** Keep video code isolated under `remotion-video/` so the desktop app remains unchanged. Register two compositions in `remotion-video/Root.tsx`, share visual primitives from `remotion-video/components/`, and drive all movement with Remotion frame interpolation. The folder is not named `remotion/` because this repo's TypeScript `baseUrl` would shadow the npm package named `remotion`.
 
 **Tech Stack:** Remotion `4.0.457`, React 19, TypeScript, existing static fallback PNG assets from `public/assets/fallback/`.
 
@@ -13,26 +13,26 @@
 ## File Structure
 
 - Modify `package.json`: add Remotion dependencies and scripts.
-- Create `remotion/index.ts`: Remotion entry point.
-- Create `remotion/Root.tsx`: registers both compositions.
-- Create `remotion/styles.ts`: visual tokens, interpolation helpers, text styles.
-- Create `remotion/data.ts`: static demo values and timeline constants.
-- Create `remotion/components/MacFrame.tsx`: Mac top bar, notch, and screen surface.
-- Create `remotion/components/PetSprite.tsx`: fallback pet image renderer with bob, glow, and state switching.
-- Create `remotion/components/SignalLines.tsx`: local activity signal lines.
-- Create `remotion/components/L2CapsuleMock.tsx`: Dynamic Island style token capsule.
-- Create `remotion/components/DashboardMock.tsx`: L3 overview dashboard mock.
-- Create `remotion/components/GrowthBurst.tsx`: done/growth burst.
-- Create `remotion/components/SceneText.tsx`: consistent titles and captions.
-- Create `remotion/ProductTeaser.tsx`: 42s horizontal timeline.
-- Create `remotion/SocialLoop.tsx`: 14s vertical looping timeline.
+- Create `remotion-video/index.ts`: Remotion entry point.
+- Create `remotion-video/Root.tsx`: registers both compositions.
+- Create `remotion-video/styles.ts`: visual tokens, interpolation helpers, text styles.
+- Create `remotion-video/data.ts`: static demo values and timeline constants.
+- Create `remotion-video/components/MacFrame.tsx`: Mac top bar, notch, and screen surface.
+- Create `remotion-video/components/PetSprite.tsx`: fallback pet image renderer with bob, glow, and state switching.
+- Create `remotion-video/components/SignalLines.tsx`: local activity signal lines.
+- Create `remotion-video/components/L2CapsuleMock.tsx`: Dynamic Island style token capsule.
+- Create `remotion-video/components/DashboardMock.tsx`: L3 overview dashboard mock.
+- Create `remotion-video/components/GrowthBurst.tsx`: done/growth burst.
+- Create `remotion-video/components/SceneText.tsx`: consistent titles and captions.
+- Create `remotion-video/ProductTeaser.tsx`: 42s horizontal timeline.
+- Create `remotion-video/SocialLoop.tsx`: 14s vertical looping timeline.
 
 ## Task 1: Remotion Project Wiring
 
 **Files:**
 - Modify: `package.json`
-- Create: `remotion/index.ts`
-- Create: `remotion/Root.tsx`
+- Create: `remotion-video/index.ts`
+- Create: `remotion-video/Root.tsx`
 
 - [ ] **Step 1: Add Remotion dependencies and scripts**
 
@@ -41,9 +41,9 @@ Update `package.json` with:
 ```json
 {
   "scripts": {
-    "remotion:studio": "remotion studio remotion/index.ts",
-    "remotion:still": "remotion still remotion/index.ts",
-    "remotion:render": "remotion render remotion/index.ts"
+    "remotion:studio": "remotion studio remotion-video/index.ts",
+    "remotion:still": "remotion still remotion-video/index.ts",
+    "remotion:render": "remotion render remotion-video/index.ts"
   },
   "devDependencies": {
     "@remotion/cli": "4.0.457",
@@ -62,7 +62,7 @@ Expected: dependencies install successfully and `package.json` remains valid.
 
 - [ ] **Step 3: Create Remotion entry point**
 
-Create `remotion/index.ts`:
+Create `remotion-video/index.ts`:
 
 ```ts
 import { registerRoot } from "remotion";
@@ -73,7 +73,7 @@ registerRoot(RemotionRoot);
 
 - [ ] **Step 4: Register both compositions**
 
-Create `remotion/Root.tsx`:
+Create `remotion-video/Root.tsx`:
 
 ```tsx
 import { Composition } from "remotion";
@@ -106,7 +106,7 @@ export function RemotionRoot() {
 
 - [ ] **Step 5: Add temporary minimal components**
 
-Create `remotion/ProductTeaser.tsx`:
+Create `remotion-video/ProductTeaser.tsx`:
 
 ```tsx
 import { AbsoluteFill } from "remotion";
@@ -120,7 +120,7 @@ export function ProductTeaser() {
 }
 ```
 
-Create `remotion/SocialLoop.tsx`:
+Create `remotion-video/SocialLoop.tsx`:
 
 ```tsx
 import { AbsoluteFill } from "remotion";
@@ -147,26 +147,26 @@ Expected: still image renders and contains the placeholder text.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add package.json remotion
+git add package.json remotion-video
 git commit -m "feat(remotion): add animation project wiring"
 ```
 
 ## Task 2: Shared Visual Components
 
 **Files:**
-- Create: `remotion/styles.ts`
-- Create: `remotion/data.ts`
-- Create: `remotion/components/MacFrame.tsx`
-- Create: `remotion/components/PetSprite.tsx`
-- Create: `remotion/components/SignalLines.tsx`
-- Create: `remotion/components/L2CapsuleMock.tsx`
-- Create: `remotion/components/DashboardMock.tsx`
-- Create: `remotion/components/GrowthBurst.tsx`
-- Create: `remotion/components/SceneText.tsx`
+- Create: `remotion-video/styles.ts`
+- Create: `remotion-video/data.ts`
+- Create: `remotion-video/components/MacFrame.tsx`
+- Create: `remotion-video/components/PetSprite.tsx`
+- Create: `remotion-video/components/SignalLines.tsx`
+- Create: `remotion-video/components/L2CapsuleMock.tsx`
+- Create: `remotion-video/components/DashboardMock.tsx`
+- Create: `remotion-video/components/GrowthBurst.tsx`
+- Create: `remotion-video/components/SceneText.tsx`
 
 - [ ] **Step 1: Create static data and timing**
 
-Create `remotion/data.ts` with static demo copy:
+Create `remotion-video/data.ts` with static demo copy:
 
 ```ts
 export const demo = {
@@ -196,7 +196,7 @@ export const social = {
 
 - [ ] **Step 2: Create style helpers**
 
-Create `remotion/styles.ts` with shared tokens and helper functions:
+Create `remotion-video/styles.ts` with shared tokens and helper functions:
 
 ```ts
 import { Easing, interpolate } from "remotion";
@@ -265,8 +265,8 @@ git commit -m "feat(remotion): add shared animation components"
 ## Task 3: Product Teaser Composition
 
 **Files:**
-- Modify: `remotion/ProductTeaser.tsx`
-- Modify as needed: `remotion/components/*`
+- Modify: `remotion-video/ProductTeaser.tsx`
+- Modify as needed: `remotion-video/components/*`
 
 - [ ] **Step 1: Replace placeholder with full teaser timeline**
 
@@ -322,15 +322,15 @@ Expected:
 - [ ] **Step 4: Commit**
 
 ```bash
-git add remotion/ProductTeaser.tsx remotion/components remotion/data.ts remotion/styles.ts
+git add remotion-video/ProductTeaser.tsx remotion-video/components remotion-video/data.ts remotion-video/styles.ts
 git commit -m "feat(remotion): build product teaser composition"
 ```
 
 ## Task 4: Social Loop Composition
 
 **Files:**
-- Modify: `remotion/SocialLoop.tsx`
-- Modify as needed: `remotion/components/*`
+- Modify: `remotion-video/SocialLoop.tsx`
+- Modify as needed: `remotion-video/components/*`
 
 - [ ] **Step 1: Replace placeholder with vertical loop**
 
@@ -377,7 +377,7 @@ Expected: frame 390 visually approaches frame 0, with no dashboard left on scree
 - [ ] **Step 3: Commit**
 
 ```bash
-git add remotion/SocialLoop.tsx remotion/components
+git add remotion-video/SocialLoop.tsx remotion-video/components
 git commit -m "feat(remotion): build social loop composition"
 ```
 

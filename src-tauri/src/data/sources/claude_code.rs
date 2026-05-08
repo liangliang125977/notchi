@@ -124,6 +124,16 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
     }
 
     fn parse_line(&self, line: &[u8], default_session: &str) -> Option<ParsedEvent> {
+        // Subagent lines have a top-level `agentId`. Detect via untyped peek
+        // once and reuse for both user/assistant branches below.
+        let agent_id: Option<String> = serde_json::from_slice::<serde_json::Value>(line)
+            .ok()
+            .and_then(|v| {
+                v.get("agentId")
+                    .and_then(|a| a.as_str())
+                    .map(str::to_owned)
+            });
+
         // Try the user envelope first since it's cheaper; both shapes
         // share the outer `type` field.
         if let Ok(uenv) = serde_json::from_slice::<UserEnvelope>(line) {
@@ -132,6 +142,11 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
                     EventKind::UserTurn
                 } else {
                     EventKind::Other
+                };
+                let parent_session_id = if agent_id.is_some() {
+                    uenv.session_id.map(str::to_owned)
+                } else {
+                    None
                 };
                 return Some(ParsedEvent {
                     source: SOURCE,
@@ -148,8 +163,8 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
                     kind,
                     usage: None,
                     is_third_party: false,
-                    agent_id: None,
-                    parent_session_id: None,
+                    agent_id: agent_id.clone(),
+                    parent_session_id,
                 });
             }
         }
@@ -166,6 +181,11 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
             cache_create: u.cache_creation_input_tokens,
         });
 
+        let parent_session_id = if agent_id.is_some() {
+            env.session_id.map(str::to_owned)
+        } else {
+            None
+        };
         Some(ParsedEvent {
             source: SOURCE,
             timestamp: env.timestamp.unwrap_or("").to_string(),
@@ -181,8 +201,8 @@ impl DataSourceAdapter for ClaudeCodeAdapter {
             kind: EventKind::Assistant,
             usage,
             is_third_party: false,
-            agent_id: None,
-            parent_session_id: None,
+            agent_id,
+            parent_session_id,
         })
     }
 }
